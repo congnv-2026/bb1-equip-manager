@@ -48,17 +48,41 @@ export default function Dashboard() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const isReceived = (item) => !!item.receiving_date || !!item.mrir_no;
-  const isInstalled = (item) => !!item.installation_date;
-  const isCompleted = (item) => {
-    if (!isInstalled(item)) return false;
-    const isDone = (status, date) => status === 'Completed' || status === 'N/A' || !!date;
-    return isDone(item.welding_status, item.welding_date) &&
-           isDone(item.bolting_status, item.bolting_date) &&
-           isDone(item.dim_status, item.dim_date) &&
-           isDone(item.leveling_status, item.leveling_date) &&
-           isDone(item.align_status, item.align_date);
+  // --- 🛠️ LOGIC ĐẾM MỚI (ĐỒNG BỘ 100% VỚI MATRIX) 🛠️ ---
+  // Hàm này kiểm tra: Chỉ cần có trạng thái DONE HOẶC có ngày hợp lệ là tính ĐÃ LÀM
+  const isStepDone = (status, date) => {
+    const s = status ? String(status).toUpperCase().trim() : '';
+    const hasStatus = s === 'DONE' || s === 'COMPLETED' || s === 'N/A';
+    
+    // Loại bỏ chuỗi trống và loại luôn cả cái chữ dd-mmm-yy mặc định
+    const hasValidDate = date && String(date).trim() !== '' && date !== 'dd-mmm-yy';
+    
+    return hasStatus || hasValidDate;
   };
+
+  const isReceived = (item) => {
+    const hasMrir = item.mrir_no && String(item.mrir_no).trim() !== '';
+    const hasStatus = item.receiving_status && String(item.receiving_status).toUpperCase().trim() === 'DONE';
+    const hasValidDate = item.receiving_date && String(item.receiving_date).trim() !== '' && item.receiving_date !== 'dd-mmm-yy';
+    
+    return hasMrir || hasStatus || hasValidDate;
+  };
+
+  const isInstalled = (item) => {
+    // Check cả 2 trường hợp tên cột có thể được đặt trong Database
+    const status = item.installation_status || item.install_status; 
+    return isStepDone(status, item.installation_date);
+  };
+
+  const isCompleted = (item) => {
+    if (!isInstalled(item)) return false; // Chưa Install thì chắc chắn chưa Complete
+    return isStepDone(item.welding_status, item.welding_date) &&
+           isStepDone(item.bolting_status, item.bolting_date) &&
+           isStepDone(item.dim_status, item.dim_date) &&
+           isStepDone(item.leveling_status, item.leveling_date) &&
+           isStepDone(item.align_status, item.align_date);
+  };
+  // ----------------------------------------------------
 
   const stats = useMemo(() => {
     let total = equipList.length;
@@ -145,9 +169,9 @@ export default function Dashboard() {
       'Deck Name': d.name, 'Total Scope': d.total, 'Received': d.received, 'Installed': d.installed, 'Backlog': d.backlog, 'Not Delivered': d.notDelivered, 'Completed': d.completed, 'Received %': `${d.receivedPct}%`, 'Installed %': `${d.installedPct}%`
     }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), "Summary KPI");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(deckData), "Status By Deck");
-    XLSX.writeFile(wb, `Installation_Dashboard_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLS.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), "Summary KPI");
+    XLS.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(deckData), "Status By Deck");
+    XLS.writeFile(wb, `Installation_Dashboard_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const exportToWord = () => {
@@ -294,7 +318,7 @@ export default function Dashboard() {
            ))}
         </div>
 
-        {/* BẢNG LOG VÀ INSIGHTS (ĐÃ ĐỒNG BỘ COL-SPAN ĐỂ CĂN THẲNG VIỀN VỚI BIỂU ĐỒ) */}
+        {/* BẢNG LOG VÀ INSIGHTS */}
         <div className="grid grid-cols-3 gap-4 shrink-0 items-stretch">
           
           <div className="col-span-2 bg-white border border-slate-300 shadow-sm overflow-hidden rounded flex flex-col">
@@ -363,21 +387,19 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* --- KHU VỰC BIỂU ĐỒ (ĐÃ DÙNG GRID ĐỂ THẲNG VIỀN) --- */}
+        {/* --- KHU VỰC BIỂU ĐỒ --- */}
         <div className="grid grid-cols-3 gap-4 flex-1 min-h-0 chart-container-print items-stretch">
            
            <div className="col-span-2 bg-white border border-slate-300 p-3 pb-0 flex flex-col items-center shadow-sm rounded h-full relative">
               <h3 className="font-black text-[13px] mb-2 text-slate-800 uppercase tracking-widest text-center shrink-0">INSTALLATION VS ARRIVAL PROGRESS BAR CHART</h3>
               
               <ResponsiveContainer width="100%" height="100%">
-                {/* ĐÃ TĂNG MARGIN BOTTOM LÊN 40 VÀ DY LÊN 12 ĐỂ CHỐNG CẮT CHỮ TRỤC X */}
                 <BarChart data={stats.deckStats} margin={{ top: 10, right: 15, left: -20, bottom: 40 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0"/>
                   <XAxis dataKey="name" tick={{fontSize: 9, fontWeight: 'bold', fill: 'black', dy: 12}} axisLine={{stroke:'#cbd5e1'}} tickLine={false}/>
                   <YAxis tickFormatter={(tick) => `${tick}%`} tick={{fontSize: 10, fontWeight: 'bold', fill: 'black'}} axisLine={false} tickLine={false} domain={[0, 100]}/>
                   <Legend verticalAlign="bottom" wrapperStyle={{fontSize: '10px', fontWeight: 'bold', color: 'black', paddingTop: '20px'}}/>
                   
-                  {/* ĐÃ ĐỔI THỨ TỰ CỘT: RECEIVED TRƯỚC, INSTALLED SAU */}
                   <Bar dataKey="receivedPct" name="Received %" fill="#0ea5e9" barSize={isPrinting ? 22 : 28} isAnimationActive={false} />
                   <Bar dataKey="installedPct" name="Installed %" fill="#3b82f6" barSize={isPrinting ? 22 : 28} isAnimationActive={false} />
                 </BarChart>
