@@ -14,6 +14,9 @@ const formatToExcelDate = (dateString) => {
   return `${day}-${month}-${year}`; 
 };
 
+// ==========================================
+// COMPONENT: Ô NHẬP NGÀY THÁNG
+// ==========================================
 const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) => {
   const [isFocused, setIsFocused] = useState(false);
   const displayValue = value ? formatToExcelDate(value) : '';
@@ -23,7 +26,53 @@ const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) 
 };
 
 // ==========================================
-// COMPONENT 1: MRIR CELL (Đã tách ra ngoài để chống nhảy con trỏ)
+// COMPONENT: Ô TEXT TỰ ĐỘNG CO GIÃN CHIỀU CAO (CẢM BIẾN PIXEL)
+// ==========================================
+const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder }) => {
+  const textareaRef = useRef(null);
+
+  const resize = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  };
+
+  useEffect(() => { resize(); }, [value]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    
+    let lastWidth = el.offsetWidth;
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        if (entry.contentRect.width !== lastWidth) {
+          lastWidth = entry.contentRect.width;
+          resize();
+        }
+      }
+    });
+    
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value || ''}
+      onChange={(e) => { onChange(e); resize(); }}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      rows={1}
+      className={`${className} overflow-hidden resize-none block w-full leading-relaxed`}
+    />
+  );
+};
+
+// ==========================================
+// COMPONENT: MRIR CELL
 // ==========================================
 const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
   const fileInputRef = useRef(null); 
@@ -58,16 +107,13 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
       const val = e.target.value;
       saveToDatabase(item.id, 'mrir_no', val);
       if (val.trim() === '') {
-          // Tự động xóa ngày khi xóa mã MRIR
           handleLocalChange(item.id, 'receiving_date', null);
           saveToDatabase(item.id, 'receiving_date', null);
       }
   }
 
-  // Khóa ngày tháng nếu MRIR trống
   const isDateEnabled = mrirNo.trim().length > 0;
   
-  // CHỈ TÔ MÀU Ô GIÁ TRỊ TEXT, CÒN LẠI ĐỂ TRUNG TÍNH (GIỐNG WELDING)
   const inputStyle = isDateEnabled 
       ? 'bg-emerald-50 text-emerald-700 border-emerald-300 focus:border-emerald-500 placeholder:text-emerald-300' 
       : 'bg-white text-slate-700 border-slate-300 focus:border-blue-400 hover:bg-slate-50';
@@ -81,7 +127,7 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
           placeholder="MRIR..." 
           onChange={(e) => handleLocalChange(item.id, 'mrir_no', e.target.value)} 
           onBlur={handleMrirBlur} 
-          className={`flex-1 px-0.5 py-1 border rounded text-[10px] font-black uppercase outline-none text-center transition-colors min-w-0 ${inputStyle}`} 
+          className={`flex-1 px-1.5 py-1 border rounded text-[10px] font-black uppercase outline-none text-left transition-colors min-w-0 ${inputStyle}`} 
         />
         {isUploading ? (
             <div className="p-1.5 bg-slate-50 border border-slate-200 w-[26px] h-[26px] flex items-center justify-center rounded"><Loader size={12} className="animate-spin text-blue-600"/></div>
@@ -108,14 +154,14 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
               saveToDatabase(item.id, 'pres_required', 'Yes'); 
           } 
         }} 
-        className={`w-full px-1 py-1 border rounded text-[11px] font-bold text-center outline-none transition-colors ${isDateEnabled ? (recDate ? 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:border-blue-400' : 'bg-white text-slate-500 border-slate-300 cursor-pointer hover:border-blue-400') : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`} 
+        className={`w-full px-1.5 py-1 border rounded text-[11px] font-bold text-left outline-none transition-colors ${isDateEnabled ? (recDate ? 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:border-blue-400' : 'bg-white text-slate-500 border-slate-300 cursor-pointer hover:border-blue-400') : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`} 
       />
     </div>
   );
 };
 
 // ==========================================
-// COMPONENT 2: MILESTONE CELL (Đã tách ra ngoài)
+// COMPONENT: MILESTONE CELL
 // ==========================================
 const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase }) => {
   const fileInputRef = useRef(null); 
@@ -135,7 +181,6 @@ const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase })
   const handleStatusChange = (val) => {
       handleLocalChange(item.id, statusField, val); 
       saveToDatabase(item.id, statusField, val); 
-      // Tự động xóa ngày khi không phải DONE
       if (val !== 'Completed' && val !== 'N/A') { 
           handleLocalChange(item.id, dateField, null); 
           saveToDatabase(item.id, dateField, null); 
@@ -151,7 +196,6 @@ const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase })
       } 
   };
   
-  // Khóa ngày tháng nếu chưa DONE
   const isDateEnabled = currentStatus === 'Completed';
 
   const styles = { 
@@ -164,7 +208,7 @@ const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase })
   return (
     <div className="flex flex-col gap-1 w-full bg-white p-1 rounded border border-slate-300 shadow-sm">
       <div className="flex items-center gap-1">
-        <select value={currentStatus} onChange={(e) => handleStatusChange(e.target.value)} className={`flex-1 px-0.5 py-1 border rounded text-[10px] font-black uppercase outline-none cursor-pointer text-center ${styles[currentStatus] || styles['Not yet']}`}>
+        <select value={currentStatus} onChange={(e) => handleStatusChange(e.target.value)} className={`flex-1 px-1 py-1 border rounded text-[10px] font-black uppercase outline-none cursor-pointer text-left ${styles[currentStatus] || styles['Not yet']}`}>
           <option value="Not yet">NOT YET</option><option value="In progress">IN PROG</option><option value="Completed">DONE</option><option value="N/A">N/A</option>
         </select>
         {isUploading ? <div className="p-1.5 bg-slate-50 border border-slate-200 w-[26px] h-[26px] flex items-center justify-center rounded"><Loader size={12} className="animate-spin text-blue-600"/></div> : hasFile ? <div className="flex h-[26px] border border-emerald-300 rounded overflow-hidden"><button onClick={()=>window.open(fileUrl)} className="px-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"><FileCheck size={12}/></button><button onClick={handleRemoveFile} className="px-1 bg-white hover:bg-red-50 text-red-400 hover:text-red-500 border-l border-emerald-300 transition-colors"><X size={10} strokeWidth={3}/></button></div> : <button onClick={()=>fileInputRef.current.click()} className="p-1.5 border border-slate-300 bg-white hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 w-[26px] h-[26px] flex items-center justify-center rounded text-slate-400 transition-colors"><Paperclip size={12}/></button>}
@@ -174,7 +218,7 @@ const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase })
           value={currentDate} 
           onChange={handleDateChange} 
           disabled={!isDateEnabled} 
-          className={`w-full px-1 py-1 border rounded text-[11px] font-bold text-center outline-none transition-colors ${isDateEnabled ? (currentDate ? 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:border-blue-400' : 'bg-white text-slate-500 border-slate-300 cursor-pointer hover:border-blue-400') : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`} 
+          className={`w-full px-1.5 py-1 border rounded text-[11px] font-bold text-left outline-none transition-colors ${isDateEnabled ? (currentDate ? 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:border-blue-400' : 'bg-white text-slate-500 border-slate-300 cursor-pointer hover:border-blue-400') : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`} 
       />
     </div>
   );
@@ -221,6 +265,7 @@ export default function Matrix() {
   };
 
   const uniqueDecks = ['All', ...new Set(equipList.map(item => item.deck_level).filter(Boolean))];
+  
   const duplicateTags = useMemo(() => {
     const tagCounts = equipList.reduce((acc, item) => {
       const tag = item.tag_no?.trim().toUpperCase();
@@ -321,9 +366,9 @@ export default function Matrix() {
 
   const handleExportExcelSelection = (mode) => {
     let dataToExport = [];
-    if (mode === 'INSTALL_ONLY') { dataToExport = filteredList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Install Date': item.installation_date ? formatToExcelDate(item.installation_date) : item.installation_status, 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Overall Status': calculateRowStatus(item).label, 'Notes': item.notes })); }
+    if (mode === 'INSTALL_ONLY') { dataToExport = filteredList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Installation': item.installation_date ? formatToExcelDate(item.installation_date) : item.installation_status, 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Overall Status': calculateRowStatus(item).label, 'Notes': item.notes })); }
     else if (mode === 'PRES_ONLY') { dataToExport = filteredList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Pres Notes': item.pres_notes })); }
-    else { dataToExport = filteredList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Install Date': item.installation_date ? formatToExcelDate(item.installation_date) : item.installation_status, 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Pres Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Overall Status': calculateRowStatus(item).label, 'Notes': item.notes, 'Pres Notes': item.pres_notes })); }
+    else { dataToExport = filteredList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Installation': item.installation_date ? formatToExcelDate(item.installation_date) : item.installation_status, 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Pres Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Overall Status': calculateRowStatus(item).label, 'Notes': item.notes, 'Pres Notes': item.pres_notes })); }
     const ws = XLSX.utils.json_to_sheet(dataToExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Export"); XLSX.writeFile(wb, `${mode}_Matrix.xlsx`); setShowExportModal(false); 
   };
 
@@ -385,10 +430,73 @@ export default function Matrix() {
 
       {/* MODAL THÊM / SỬA */}
       {showAddModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl"><div className="px-6 py-4 border-b flex justify-between items-center"><h3 className="font-black text-xl flex items-center gap-2"><Plus className="text-blue-600"/> Add New</h3><button onClick={()=>setShowAddModal(false)} className="p-2"><X size={20}/></button></div><form onSubmit={handleAddSubmit} className="p-6"><div className="bg-slate-50 p-5 rounded-xl border grid grid-cols-3 gap-4"><div className="col-span-1"><label className="text-xs font-bold uppercase">Tag No *</label><input required type="text" name="tag_no" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Package</label><input type="text" name="package" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Deck</label><select name="deck_level" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none"><option value="" hidden>Select...</option><option value="SUB-CELLAR DECK">SUB-CELLAR DECK</option><option value="CELLAR DECK">CELLAR DECK</option><option value="MEZZANINE DECK">MEZZANINE DECK</option><option value="MAIN DECK">MAIN DECK</option><option value="WEATHER DECK">WEATHER DECK</option></select></div><div className="col-span-3"><label className="text-xs font-bold uppercase">Description</label><input type="text" name="description" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" /></div></div><div className="flex justify-end gap-3 mt-4"><button type="button" onClick={()=>setShowAddModal(false)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button><button type="submit" className="px-8 py-2 font-bold text-white bg-blue-600 rounded-xl">Create</button></div></form></div></div>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl">
+            <div className="px-6 py-4 border-b flex justify-between items-center">
+              <h3 className="font-black text-xl flex items-center gap-2"><Plus className="text-blue-600"/> Add New</h3>
+              <button onClick={()=>setShowAddModal(false)} className="p-2"><X size={20}/></button>
+            </div>
+            <form onSubmit={handleAddSubmit} className="p-6">
+              <div className="bg-slate-50 p-5 rounded-xl border grid grid-cols-3 gap-4">
+                <div className="col-span-1">
+                  <label className="text-xs font-bold uppercase">Tag No *</label>
+                  <input required type="text" name="tag_no" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" />
+                </div>
+                <div className="col-span-1">
+                  <label className="text-xs font-bold uppercase">Package</label>
+                  <input type="text" name="package" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" />
+                </div>
+                <div className="col-span-1">
+                  <label className="text-xs font-bold uppercase">Deck</label>
+                  <input type="text" name="deck_level" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" />
+                </div>
+                <div className="col-span-3">
+                  <label className="text-xs font-bold uppercase">Description</label>
+                  <input type="text" name="description" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-4">
+                <button type="button" onClick={()=>setShowAddModal(false)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button>
+                <button type="submit" className="px-8 py-2 font-bold text-white bg-blue-600 rounded-xl">Create</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
+
       {editingItem && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl"><div className="px-6 py-4 border-b flex justify-between items-center"><h3 className="font-black text-xl flex items-center gap-2"><Edit className="text-emerald-600"/> Edit</h3><button onClick={()=>setEditingItem(null)} className="p-2"><X size={20}/></button></div><form onSubmit={handleEditSubmit} className="p-6"><div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 grid grid-cols-3 gap-4"><div className="col-span-1"><label className="text-xs font-bold uppercase">Tag No *</label><input required type="text" value={editingItem.tag_no} onChange={(e)=>setEditingItem({...editingItem, tag_no: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Package</label><input type="text" value={editingItem.package || ''} onChange={(e)=>setEditingItem({...editingItem, package: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Deck</label><select value={editingItem.deck_level || ''} onChange={(e)=>setEditingItem({...editingItem, deck_level: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none"><option value="" hidden>Select...</option><option value="SUB-CELLAR DECK">SUB-CELLAR DECK</option><option value="CELLAR DECK">CELLAR DECK</option><option value="MEZZANINE DECK">MEZZANINE DECK</option><option value="MAIN DECK">MAIN DECK</option><option value="WEATHER DECK">WEATHER DECK</option></select></div><div className="col-span-3"><label className="text-xs font-bold uppercase">Description</label><input type="text" value={editingItem.description || ''} onChange={(e)=>setEditingItem({...editingItem, description: e.target.value})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" /></div></div><div className="flex justify-end gap-3 mt-4"><button type="button" onClick={()=>setEditingItem(null)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button><button type="submit" className="px-8 py-2 font-bold text-white bg-emerald-600 rounded-xl">Update</button></div></form></div></div>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl">
+            <div className="px-6 py-4 border-b flex justify-between items-center">
+              <h3 className="font-black text-xl flex items-center gap-2"><Edit className="text-emerald-600"/> Edit</h3>
+              <button onClick={()=>setEditingItem(null)} className="p-2"><X size={20}/></button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="p-6">
+              <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 grid grid-cols-3 gap-4">
+                <div className="col-span-1">
+                  <label className="text-xs font-bold uppercase">Tag No *</label>
+                  <input required type="text" value={editingItem.tag_no} onChange={(e)=>setEditingItem({...editingItem, tag_no: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" />
+                </div>
+                <div className="col-span-1">
+                  <label className="text-xs font-bold uppercase">Package</label>
+                  <input type="text" value={editingItem.package || ''} onChange={(e)=>setEditingItem({...editingItem, package: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" />
+                </div>
+                <div className="col-span-1">
+                  <label className="text-xs font-bold uppercase">Deck</label>
+                  <input type="text" value={editingItem.deck_level || ''} onChange={(e)=>setEditingItem({...editingItem, deck_level: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" />
+                </div>
+                <div className="col-span-3">
+                  <label className="text-xs font-bold uppercase">Description</label>
+                  <input type="text" value={editingItem.description || ''} onChange={(e)=>setEditingItem({...editingItem, description: e.target.value})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-4">
+                <button type="button" onClick={()=>setEditingItem(null)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button>
+                <button type="submit" className="px-8 py-2 font-bold text-white bg-emerald-600 rounded-xl">Update</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* HEADER BỘ LỌC ĐỒNG BỘ MÀU CHUẨN */}
@@ -420,7 +528,7 @@ export default function Matrix() {
          <div className="flex items-center gap-2 shrink-0">
            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-md px-2 h-[36px]">
               <Filter size={14} className="text-slate-400 mr-2" />
-              <select value={filterDeck} onChange={(e) => setFilterDeck(e.target.value)} className="bg-transparent py-1 text-xs font-bold text-slate-600 outline-none pr-2 cursor-pointer uppercase">
+              <select value={filterDeck} onChange={(e) => setFilterDeck(e.target.value)} className="bg-transparent py-1 text-xs font-bold text-slate-600 outline-none pr-2 cursor-pointer uppercase max-w-[150px]">
                 {uniqueDecks.map(d => <option key={d} value={d}>{d === 'All' ? 'ALL DECKS' : d}</option>)}
               </select>
            </div>
@@ -445,18 +553,15 @@ export default function Matrix() {
             <table className="w-full text-left border-collapse min-w-max relative table-fixed">
               <thead>
                 <tr className="bg-slate-50 text-slate-600 uppercase text-[10px] font-black border-b-2 border-slate-300">
-                  <th style={{ width: colWidths.tag }} className="p-3 pl-4 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-20">Tag No <Resizer colKey="tag" /></th>
+                  <th style={{ width: colWidths.tag }} className="p-3 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-20 text-center">Tag No <Resizer colKey="tag" /></th>
                   <th style={{ width: colWidths.pkg }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Package <Resizer colKey="pkg" /></th>
-                  <th style={{ width: colWidths.desc }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">Description <Resizer colKey="desc" /></th>
-                  <th style={{ width: colWidths.deck }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">Deck <Resizer colKey="deck" /></th>
+                  <th style={{ width: colWidths.desc }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Description <Resizer colKey="desc" /></th>
+                  <th style={{ width: colWidths.deck }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Deck <Resizer colKey="deck" /></th>
                   
-                  {/* CỘT MRIR */}
                   <th style={{ width: colWidths.mrir }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">MRIR & Rec <Resizer colKey="mrir" /></th>
                   
-                  {/* CỘT INSTALL DATE ĐÃ NÂNG CẤP */}
-                  <th style={{ width: colWidths.install }} className="p-3 border-r border-slate-300 sticky top-0 bg-blue-50/50 z-10 text-center text-blue-700">Install Date <Resizer colKey="install" /></th>
+                  <th style={{ width: colWidths.install }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">INSTALLATION <Resizer colKey="install" /></th>
                   
-                  {/* Nhóm Cột Kỹ Thuật */}
                   <th style={{ width: colWidths.welding }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Welding <Resizer colKey="welding" /></th>
                   <th style={{ width: colWidths.bolting }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Bolting <Resizer colKey="bolting" /></th>
                   <th style={{ width: colWidths.dim }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Dim Check <Resizer colKey="dim" /></th>
@@ -464,7 +569,7 @@ export default function Matrix() {
                   <th style={{ width: colWidths.align }} className="p-3 border-r border-slate-300 sticky top-0 bg-sky-50/50 z-10 text-center text-slate-600">Alignment <Resizer colKey="align" /></th>
                   
                   <th style={{ width: colWidths.overall }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Overall <Resizer colKey="overall" /></th>
-                  <th style={{ width: colWidths.notes }} className="p-3 sticky top-0 bg-slate-50 z-10">Notes</th>
+                  <th style={{ width: colWidths.notes }} className="p-3 sticky top-0 bg-slate-50 z-10 text-center">Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-300">
@@ -473,22 +578,45 @@ export default function Matrix() {
                   const isDuplicate = duplicateTags.has(item.tag_no?.trim().toUpperCase());
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 group">
-                      <td className={`p-3 pl-4 border-r border-b border-slate-300 align-top sticky left-0 z-10 bg-white group-hover:bg-slate-50 overflow-hidden ${isDuplicate ? 'bg-red-50 border-y border-y-red-300' : ''}`}>
-                        <div className="flex flex-col gap-1.5 min-h-[44px]">
+                      <td className={`p-3 border-r border-b border-slate-300 align-top sticky left-0 z-10 bg-white group-hover:bg-slate-50 overflow-hidden text-left ${isDuplicate ? 'bg-red-50 border-y border-y-red-300' : ''}`}>
+                        <div className="flex flex-col gap-1.5">
                           <span className={`font-black text-sm w-full whitespace-normal break-words ${isDuplicate ? 'text-red-600' : 'text-slate-800'}`} title={item.tag_no}>{isDuplicate && <AlertCircle size={14} className="inline mr-1 animate-pulse"/>}{item.tag_no}</span>
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 shrink-0"><button onClick={() => setEditingItem(item)} className="p-1 border bg-white text-slate-400 hover:text-blue-600 rounded"><Edit size={12} /></button><button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 border bg-white text-slate-400 hover:text-red-600 rounded"><Trash2 size={12} /></button></div>
                         </div>
                       </td>
-                      <td className="p-2 border-r border-b border-slate-300 align-top"><input type="text" value={item.package || ''} onChange={(e) => handleLocalChange(item.id, 'package', e.target.value.toUpperCase())} onBlur={(e) => saveToDatabase(item.id, 'package', e.target.value.toUpperCase())} className="w-full text-center bg-transparent font-bold text-[11px] uppercase outline-none hover:bg-white focus:bg-white rounded px-1"/></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-top"><textarea rows="2" value={item.description || ''} onChange={(e) => handleLocalChange(item.id, 'description', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'description', e.target.value)} className="w-full bg-transparent font-bold text-xs outline-none hover:bg-white focus:bg-white rounded px-1 resize-none" /></td>
-                      <td className="p-3 border-r border-b border-slate-300 align-top"><select value={item.deck_level || ''} onChange={(e) => { handleLocalChange(item.id, 'deck_level', e.target.value.toUpperCase()); saveToDatabase(item.id, 'deck_level', e.target.value.toUpperCase()); }} className="w-full bg-transparent font-medium text-[11px] uppercase outline-none hover:bg-white rounded px-1 cursor-pointer"><option hidden>Deck...</option><option value="SUB-CELLAR DECK">SUB-CELLAR DECK</option><option value="CELLAR DECK">CELLAR DECK</option><option value="MEZZANINE DECK">MEZZANINE DECK</option><option value="MAIN DECK">MAIN DECK</option><option value="WEATHER DECK">WEATHER DECK</option></select></td>
                       
-                      {/* ĐÃ TÍCH HỢP MRIR CELL TẠI ĐÂY */}
+                      <td className="p-2 border-r border-b border-slate-300 align-top text-left">
+                        <AutoResizeTextarea 
+                          value={item.package || ''} 
+                          onChange={(e) => handleLocalChange(item.id, 'package', e.target.value.toUpperCase())} 
+                          onBlur={(e) => saveToDatabase(item.id, 'package', e.target.value.toUpperCase())} 
+                          className="text-left bg-transparent font-bold text-[11px] uppercase outline-none hover:bg-slate-100 focus:bg-white rounded px-1"
+                        />
+                      </td>
+                      
+                      <td className="p-2 border-r border-b border-slate-300 align-top text-left">
+                        <AutoResizeTextarea 
+                          value={item.description || ''} 
+                          onChange={(e) => handleLocalChange(item.id, 'description', e.target.value)} 
+                          onBlur={(e) => saveToDatabase(item.id, 'description', e.target.value)} 
+                          className="text-left bg-transparent font-bold text-xs outline-none hover:bg-slate-100 focus:bg-white rounded px-1" 
+                        />
+                      </td>
+                      
+                      {/* DECK ĐÃ TRỞ THÀNH Ô NHẬP TEXT TỰ ĐỘNG XUỐNG DÒNG */}
+                      <td className="p-3 border-r border-b border-slate-300 align-top text-left">
+                        <AutoResizeTextarea 
+                          value={item.deck_level || ''} 
+                          onChange={(e) => handleLocalChange(item.id, 'deck_level', e.target.value.toUpperCase())} 
+                          onBlur={(e) => saveToDatabase(item.id, 'deck_level', e.target.value.toUpperCase())} 
+                          className="text-left bg-transparent font-medium text-[11px] uppercase outline-none hover:bg-slate-100 focus:bg-white rounded px-1"
+                        />
+                      </td>
+                      
                       <td className="p-2 border-r border-b border-slate-300 align-top">
                         <MrirCell item={item} handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} />
                       </td>
 
-                      {/* INSTALL DATE ĐÃ CHUYỂN THÀNH MILESTONE CELL */}
                       <td className="p-2 border-r border-b border-slate-300 align-top">
                         <MilestoneCell item={item} fieldPrefix="installation" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} />
                       </td>
@@ -498,8 +626,18 @@ export default function Matrix() {
                       <td className="p-2 border-r border-b border-slate-300 align-top"><MilestoneCell item={item} fieldPrefix="dim" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
                       <td className="p-2 border-r border-b border-slate-300 align-top"><MilestoneCell item={item} fieldPrefix="leveling" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
                       <td className="p-2 border-r border-b border-slate-300 align-top"><MilestoneCell item={item} fieldPrefix="align" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      
                       <td className="p-3 border-r border-b border-slate-300 align-top"><span className={`px-2 py-1.5 rounded text-[9px] uppercase block w-full text-center border ${rowStatus.style}`}>{rowStatus.label}</span></td>
-                      <td className="p-3 border-b border-slate-300 align-top"><textarea rows="2" value={item.notes || ''} placeholder="Notes..." onChange={(e) => handleLocalChange(item.id, 'notes', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'notes', e.target.value)} className="w-full bg-transparent hover:bg-white rounded text-[10px] text-slate-500 outline-none resize-none" /></td>
+                      
+                      <td className="p-3 border-b border-slate-300 align-top text-left">
+                        <AutoResizeTextarea 
+                          value={item.notes || ''} 
+                          placeholder="Notes..." 
+                          onChange={(e) => handleLocalChange(item.id, 'notes', e.target.value)} 
+                          onBlur={(e) => saveToDatabase(item.id, 'notes', e.target.value)} 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white rounded text-[10px] text-slate-500 outline-none" 
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -538,7 +676,7 @@ export default function Matrix() {
               <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Deck</th>
               <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>MRIR</th>
               <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Rec Date</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Install</th>
+              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>INSTALLATION</th>
               <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Welding</th>
               <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Bolting</th>
               <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Dim Check</th>
@@ -573,10 +711,9 @@ export default function Matrix() {
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.package}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.description}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.deck_level}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', color: '#1d4ed8', fontWeight: 'bold' }}>{item.mrir_no}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', color: '#1d4ed8', fontWeight: 'bold' }}>{item.mrir_no}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center' }}>{formatToExcelDate(item.receiving_date)}</td>
                   
-                  {/* Bản in đã cập nhật hiển thị cả Status và Date cho dễ nhìn */}
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{instStatus === 'Completed' ? 'DONE' : instStatus}{instDate}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{weldStatus}{weldDate}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{boltStatus}{boltDate}</td>

@@ -34,6 +34,52 @@ const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) 
   );
 };
 
+// ==========================================
+// COMPONENT: Ô TEXT TỰ ĐỘNG CO GIÃN CHIỀU CAO (CẢM BIẾN PIXEL)
+// ==========================================
+const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder }) => {
+  const textareaRef = useRef(null);
+
+  const resize = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  };
+
+  useEffect(() => { resize(); }, [value]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    
+    let lastWidth = el.offsetWidth;
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        if (entry.contentRect.width !== lastWidth) {
+          lastWidth = entry.contentRect.width;
+          resize();
+        }
+      }
+    });
+    
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value || ''}
+      onChange={(e) => { onChange(e); resize(); }}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      rows={1}
+      className={`${className} overflow-hidden resize-none block w-full leading-relaxed`}
+    />
+  );
+};
+
 export default function Preservation() {
   const [equipList, setEquipList] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -253,14 +299,14 @@ export default function Preservation() {
     };
 
     return (
-        <div className="flex flex-col gap-1 items-left justify-center w-full min-h-[35px] text-left">
+        <div className="flex flex-col gap-1 items-center justify-center w-full min-h-[35px]">
             {files.length > 0 && (
               <span className="text-[9px] font-black text-slate-400 bg-slate-100 border px-1.5 py-0.5 rounded w-fit uppercase tracking-wider mb-1">
                 Count: {files.length}
               </span>
             )}
             
-            <div className="flex flex-col gap-1 w-full">
+            <div className="flex flex-col gap-1 w-full items-center">
               {files.map((file, idx) => (
                  <div key={idx} className="flex items-center h-[20px] border border-emerald-300 rounded bg-emerald-50 text-emerald-700 text-[9px] font-bold overflow-hidden w-full max-w-[125px]">
                     <button type="button" onClick={() => window.open(file.url, '_blank')} className="flex-1 px-1.5 text-left truncate hover:bg-emerald-100" title={file.name}>
@@ -274,9 +320,9 @@ export default function Preservation() {
             </div>
 
             {isUploading ? (
-                <div className="text-[9px] font-bold text-blue-600 flex items-center gap-1 mt-1"><Loader size={10} className="animate-spin"/> Uploading...</div>
+                <div className="text-[9px] font-bold text-blue-600 flex items-center justify-center gap-1 mt-1"><Loader size={10} className="animate-spin"/> Uploading...</div>
             ) : (
-                <button onClick={() => fileInputRef.current.click()} disabled={!item.pres_start_date} className={`flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-black transition-all shadow-sm w-fit mt-1 ${item.pres_start_date ? 'bg-white hover:bg-blue-50 text-slate-500 hover:text-blue-600 border-slate-300' : 'bg-slate-50 text-slate-400 border-slate-200 opacity-50 cursor-not-allowed'}`}>
+                <button onClick={() => fileInputRef.current.click()} disabled={!item.pres_start_date} className={`flex items-center justify-center gap-1 px-2 py-1 rounded border text-[9px] font-black transition-all shadow-sm w-fit mt-1 ${item.pres_start_date ? 'bg-white hover:bg-blue-50 text-slate-500 hover:text-blue-600 border-slate-300' : 'bg-slate-50 text-slate-400 border-slate-200 opacity-50 cursor-not-allowed'}`}>
                     <Paperclip size={10} /> + Add PDF
                 </button>
             )}
@@ -408,33 +454,72 @@ export default function Preservation() {
                       </td>
 
                       <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
-                         <textarea rows="1" readOnly value={item.package || '-'} className="w-full text-left bg-transparent text-slate-600 font-bold text-[11px] uppercase rounded px-2 py-0.5 outline-none resize-none whitespace-normal break-words" />
+                        <AutoResizeTextarea 
+                          value={item.package || ''} 
+                          onChange={(e) => handleLocalChange(item.id, 'package', e.target.value.toUpperCase())} 
+                          onBlur={(e) => saveToDatabase(item.id, 'package', e.target.value.toUpperCase())} 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-[11px] uppercase rounded px-1 outline-none resize-none" 
+                        />
                       </td>
                       
                       <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
-                         <textarea rows="2" readOnly value={item.description || '-'} className="w-full text-left bg-transparent text-slate-700 font-bold text-xs leading-snug rounded px-2 py-0.5 outline-none resize-none whitespace-normal break-words" />
+                        <AutoResizeTextarea 
+                          value={item.description || ''} 
+                          onChange={(e) => handleLocalChange(item.id, 'description', e.target.value)} 
+                          onBlur={(e) => saveToDatabase(item.id, 'description', e.target.value)} 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-xs rounded px-1 outline-none resize-none" 
+                        />
                       </td>
 
-                      <td className="p-3 border-r border-b border-slate-300 align-top overflow-hidden text-left">
-                         <div className="px-2 py-0.5 text-[11px] font-medium text-slate-700 uppercase whitespace-normal break-words text-left">{item.deck_level || '-'}</div>
+                      {/* Thay đổi Deck thành Text Input co giãn */}
+                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
+                        <AutoResizeTextarea 
+                          value={item.deck_level || ''} 
+                          onChange={(e) => handleLocalChange(item.id, 'deck_level', e.target.value.toUpperCase())} 
+                          onBlur={(e) => saveToDatabase(item.id, 'deck_level', e.target.value.toUpperCase())} 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-medium text-[11px] uppercase rounded px-1 outline-none resize-none" 
+                        />
                       </td>
 
                       <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
-                        <textarea rows="2" value={item.pres_initial_method || ''} placeholder="Initial method..." onChange={(e) => handleLocalChange(item.id, 'pres_initial_method', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'pres_initial_method', e.target.value)} className="w-full px-2 py-1 border border-transparent hover:bg-white focus:bg-white hover:border-slate-300 focus:border-blue-500 rounded text-[11px] font-medium outline-none bg-transparent text-slate-700 text-left resize-none whitespace-normal break-words leading-tight" />
+                        <AutoResizeTextarea 
+                          value={item.pres_initial_method || ''} 
+                          placeholder="Init method..." 
+                          onChange={(e) => handleLocalChange(item.id, 'pres_initial_method', e.target.value)} 
+                          onBlur={(e) => saveToDatabase(item.id, 'pres_initial_method', e.target.value)} 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded text-[11px] font-medium text-slate-700 outline-none resize-none px-1" 
+                        />
                       </td>
                       
                       <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
-                        <textarea rows="2" value={item.pres_alternate_method || ''} placeholder="Alt method..." onChange={(e) => handleLocalChange(item.id, 'pres_alternate_method', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'pres_alternate_method', e.target.value)} className="w-full px-2 py-1 border border-transparent hover:bg-white focus:bg-white hover:border-slate-300 focus:border-blue-500 rounded text-[11px] font-medium outline-none bg-transparent text-slate-700 text-left resize-none whitespace-normal break-words leading-tight" />
+                        <AutoResizeTextarea 
+                          value={item.pres_alternate_method || ''} 
+                          placeholder="Alt method..." 
+                          onChange={(e) => handleLocalChange(item.id, 'pres_alternate_method', e.target.value)} 
+                          onBlur={(e) => saveToDatabase(item.id, 'pres_alternate_method', e.target.value)} 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded text-[11px] font-medium text-slate-700 outline-none resize-none px-1" 
+                        />
                       </td>
                       
                       <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
-                        <textarea rows="1" value={item.pres_checksheet || ''} placeholder="Checksheet..." onChange={(e) => handleLocalChange(item.id, 'pres_checksheet', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'pres_checksheet', e.target.value)} className="w-full px-2 py-1 border border-transparent hover:bg-white focus:bg-white hover:border-slate-300 focus:border-blue-500 rounded text-[11px] font-black text-slate-800 outline-none bg-transparent text-left resize-none whitespace-normal break-words" />
+                        <AutoResizeTextarea 
+                          value={item.pres_checksheet || ''} 
+                          placeholder="Checksheet..." 
+                          onChange={(e) => handleLocalChange(item.id, 'pres_checksheet', e.target.value)} 
+                          onBlur={(e) => saveToDatabase(item.id, 'pres_checksheet', e.target.value)} 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded text-[11px] font-black text-slate-800 outline-none resize-none px-1" 
+                        />
                       </td>
                       
+                      {/* Thay đổi Freq thành Text Input co giãn */}
                       <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
-                        <select value={item.pres_freq || ''} onChange={(e) => { handleLocalChange(item.id, 'pres_freq', e.target.value); saveToDatabase(item.id, 'pres_freq', e.target.value); }} className="w-full px-1 py-1.5 hover:bg-white focus:bg-white border border-transparent hover:border-slate-300 rounded text-[11px] font-bold outline-none cursor-pointer bg-transparent text-slate-700 focus:border-blue-500 text-left">
-                          <option value="" disabled hidden>Freq...</option><option value="1 W">1 W</option><option value="2 W">2 W</option><option value="1 M">1 M</option><option value="2 M">2 M</option><option value="3 M">3 M</option><option value="6 M">6 M</option>
-                        </select>
+                        <AutoResizeTextarea 
+                          value={item.pres_freq || ''} 
+                          placeholder="Freq..." 
+                          onChange={(e) => handleLocalChange(item.id, 'pres_freq', e.target.value.toUpperCase())} 
+                          onBlur={(e) => saveToDatabase(item.id, 'pres_freq', e.target.value.toUpperCase())} 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-500 rounded text-[11px] font-bold text-slate-700 uppercase outline-none resize-none px-1" 
+                        />
                       </td>
                       
                       <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-center">
@@ -463,7 +548,13 @@ export default function Preservation() {
                       </td>
 
                       <td className="p-2 border-b border-slate-300 align-top overflow-hidden text-left">
-                         <textarea rows="2" value={item.pres_notes || ''} placeholder="Notes..." onChange={(e) => handleLocalChange(item.id, 'pres_notes', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'pres_notes', e.target.value)} className="w-full px-2 py-1 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-slate-300 rounded text-[10px] font-medium text-slate-500 outline-none resize-none min-h-[44px] text-left whitespace-normal break-words" />
+                         <AutoResizeTextarea 
+                           value={item.pres_notes || ''} 
+                           placeholder="Notes..." 
+                           onChange={(e) => handleLocalChange(item.id, 'pres_notes', e.target.value)} 
+                           onBlur={(e) => saveToDatabase(item.id, 'pres_notes', e.target.value)} 
+                           className="w-full px-1 py-1 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 rounded text-[10px] font-medium text-slate-500 outline-none resize-none text-left" 
+                         />
                       </td>
                     </tr>
                   );
