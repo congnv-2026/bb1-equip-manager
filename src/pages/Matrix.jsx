@@ -14,9 +14,6 @@ const formatToExcelDate = (dateString) => {
   return `${day}-${month}-${year}`; 
 };
 
-// ==========================================
-// COMPONENT: Ô NHẬP NGÀY THÁNG
-// ==========================================
 const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) => {
   const [isFocused, setIsFocused] = useState(false);
   const displayValue = value ? formatToExcelDate(value) : '';
@@ -25,25 +22,18 @@ const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) 
   );
 };
 
-// ==========================================
-// COMPONENT: Ô TEXT TỰ ĐỘNG CO GIÃN CHIỀU CAO
-// ==========================================
 const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder }) => {
   const textareaRef = useRef(null);
-
   const resize = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
   };
-
   useEffect(() => { resize(); }, [value]);
-
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    
     let lastWidth = el.offsetWidth;
     const observer = new ResizeObserver((entries) => {
       for (let entry of entries) {
@@ -53,36 +43,21 @@ const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder })
         }
       }
     });
-    
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
   return (
-    <textarea
-      ref={textareaRef}
-      value={value || ''}
-      onChange={(e) => { onChange(e); resize(); }}
-      onBlur={onBlur}
-      placeholder={placeholder}
-      rows={1}
-      className={`${className} overflow-hidden resize-none block w-full leading-relaxed`}
-    />
+    <textarea ref={textareaRef} value={value || ''} onChange={(e) => { onChange(e); resize(); }} onBlur={onBlur} placeholder={placeholder} rows={1} className={`${className} overflow-hidden resize-none block w-full leading-relaxed`} />
   );
 };
 
-// ==========================================
-// COMPONENT: MRIR CELL
-// ==========================================
 const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
   const fileInputRef = useRef(null); 
   const [isUploading, setIsUploading] = useState(false); 
-  
   const mrirNo = item.mrir_no || ''; 
   const recDate = item.receiving_date || ''; 
   const fileUrl = item.mrir_file; 
   const hasFile = !!fileUrl && fileUrl.startsWith('http');
-  
   const handleFileUpload = async (e) => { 
       const file = e.target.files[0]; 
       if (!file) return; 
@@ -95,14 +70,12 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
           saveToDatabase(item.id, 'mrir_file', data.publicUrl); 
       } catch (err) { console.error(err); } finally { setIsUploading(false); e.target.value = null; } 
   };
-
   const handleRemoveFile = () => { 
       if (window.confirm("Gỡ file đính kèm MRIR?")) { 
           handleLocalChange(item.id, 'mrir_file', null); 
           saveToDatabase(item.id, 'mrir_file', null); 
       } 
   };
-
   const handleMrirBlur = (e) => {
       const val = e.target.value;
       saveToDatabase(item.id, 'mrir_no', val);
@@ -111,10 +84,8 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
           saveToDatabase(item.id, 'receiving_date', null);
       }
   }
-
   const isDateEnabled = mrirNo.trim().length > 0;
   const inputStyle = isDateEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-300 focus:border-emerald-500 placeholder:text-emerald-300' : 'bg-white text-slate-700 border-slate-300 focus:border-blue-400 hover:bg-slate-50';
-  
   return (
     <div className="flex flex-col gap-1 w-full bg-white p-1 rounded border border-slate-300 shadow-sm">
       <div className="flex items-center gap-1">
@@ -136,50 +107,28 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
   );
 };
 
-// ==========================================
-// COMPONENT: MILESTONE CELL
-// ==========================================
 const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase }) => {
   const fileInputRef = useRef(null); 
   const [isUploading, setIsUploading] = useState(false); 
   const statusField = `${fieldPrefix}_status`; 
   const dateField = `${fieldPrefix}_date`; 
   const fileField = `${fieldPrefix}_file`; 
-  
   const currentStatus = item[statusField] || 'Not yet'; 
   const currentDate = item[dateField] || ''; 
   const fileUrl = item[fileField]; 
   const hasFile = !!fileUrl && fileUrl.startsWith('http');
-  
   const handleFileUpload = async (e) => { const file = e.target.files[0]; if (!file) return; setIsUploading(true); try { const fileName = `${item.tag_no.replace(/[^a-zA-Z0-9]/g, '_')}_${fieldPrefix}_${Date.now()}.${file.name.split('.').pop()}`; await supabase.storage.from('equipment_files').upload(fileName, file); const { data } = supabase.storage.from('equipment_files').getPublicUrl(fileName); handleLocalChange(item.id, fileField, data.publicUrl); saveToDatabase(item.id, fileField, data.publicUrl); } catch (err) {} finally { setIsUploading(false); e.target.value = null; } };
   const handleRemoveFile = () => { if (window.confirm("Gỡ file?")) { handleLocalChange(item.id, fileField, null); saveToDatabase(item.id, fileField, null); } };
-  
   const handleStatusChange = (val) => {
-      handleLocalChange(item.id, statusField, val); 
-      saveToDatabase(item.id, statusField, val); 
-      if (val !== 'Completed' && val !== 'N/A') { 
-          handleLocalChange(item.id, dateField, null); 
-          saveToDatabase(item.id, dateField, null); 
-      } 
+      handleLocalChange(item.id, statusField, val); saveToDatabase(item.id, statusField, val); 
+      if (val !== 'Completed' && val !== 'N/A') { handleLocalChange(item.id, dateField, null); saveToDatabase(item.id, dateField, null); } 
   };
-
   const handleDateChange = (val) => { 
-      handleLocalChange(item.id, dateField, val); 
-      saveToDatabase(item.id, dateField, val); 
-      if (val && currentStatus !== 'Completed') { 
-          handleLocalChange(item.id, statusField, 'Completed'); 
-          saveToDatabase(item.id, statusField, 'Completed'); 
-      } 
+      handleLocalChange(item.id, dateField, val); saveToDatabase(item.id, dateField, val); 
+      if (val && currentStatus !== 'Completed') { handleLocalChange(item.id, statusField, 'Completed'); saveToDatabase(item.id, statusField, 'Completed'); } 
   };
-  
   const isDateEnabled = currentStatus === 'Completed';
-
-  const styles = { 
-      'Not yet': 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50', 
-      'In progress': 'bg-blue-50 text-blue-700 border-blue-300', 
-      'Completed': 'bg-emerald-50 text-emerald-700 border-emerald-300', 
-      'N/A': 'bg-slate-100 text-slate-400 opacity-60 border-slate-300' 
-  };
+  const styles = { 'Not yet': 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50', 'In progress': 'bg-blue-50 text-blue-700 border-blue-300', 'Completed': 'bg-emerald-50 text-emerald-700 border-emerald-300', 'N/A': 'bg-slate-100 text-slate-400 opacity-60 border-slate-300' };
   
   return (
     <div className="flex flex-col gap-1 w-full bg-white p-1 rounded border border-slate-300 shadow-sm">
@@ -195,46 +144,35 @@ const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase })
   );
 };
 
-// ==========================================
-// TRANG CHÍNH: MATRIX
-// ==========================================
 export default function Matrix() {
   const [equipList, setEquipList] = useState([]);
-  
-  // States Lọc & Hiển thị
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDeck, setFilterDeck] = useState('All');
-  const [filterPkg, setFilterPkg] = useState('All'); // Mới: Filter Package
+  const [filterPkg, setFilterPkg] = useState('All');
   const [statusFilters, setStatusFilters] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // Mới: Sorting
-  
-  // States Giao diện & Modal
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [colWidths, setColWidths] = useState({ tag: 160, pkg: 105, desc: 220, deck: 130, mrir: 140, install: 125, welding: 125, bolting: 125, dim: 125, leveling: 125, align: 125, overall: 110, notes: 180 });
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   
-  // States Import
   const importFileRef = useRef(null);
   const [isImporting, setIsImporting] = useState(false);
   const [pendingImportData, setPendingImportData] = useState([]);
   const [showImportOptionsModal, setShowImportOptionsModal] = useState(false);
   const [importSortOption, setImportSortOption] = useState('ORIGINAL');
 
-  // States Delete All
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
-
   const [formData, setFormData] = useState({ tag_no: '', description: '', package: '', deck_level: '', mrir_no: '', receiving_date: '', installation_date: '', notes: '' });
 
   async function fetchData() {
-    // Sửa đổi: Lấy dữ liệu theo ID (Thứ tự thêm vào) thay vì ép theo tag_no
-    const { data: listData } = await supabase.from('master_equipment').select('*').order('id', { ascending: true });
+    // SỬA LỖI: Dùng created_at thay vì id để giữ nguyên chính xác thứ tự file gốc
+    const { data: listData } = await supabase.from('master_equipment').select('*').order('created_at', { ascending: true });
     if (listData) setEquipList(listData);
   }
   useEffect(() => { fetchData(); }, []);
 
-  // Các hàm kiểm tra trạng thái
   const isReceived = (item) => !!item.receiving_date || !!item.mrir_no;
   const isInstalled = (item) => item.installation_status === 'Completed' || item.installation_status === 'N/A' || !!item.installation_date;
   const isCompleted = (item) => {
@@ -250,7 +188,6 @@ export default function Matrix() {
     return { label: 'NOT DELIVERED', style: 'bg-slate-50 text-slate-500 border-slate-200 font-bold' };
   };
 
-  // Trích xuất các list duy nhất cho Dropdown Filter
   const uniqueDecks = ['All', ...new Set(equipList.map(item => item.deck_level).filter(Boolean))];
   const uniquePkgs = ['All', ...new Set(equipList.map(item => item.package).filter(Boolean))];
 
@@ -263,7 +200,6 @@ export default function Matrix() {
     return new Set(Object.keys(tagCounts).filter(tag => tagCounts[tag] > 1));
   }, [equipList]);
 
-  // BỘ LỌC CẤP 1: Xử lý Search, Deck, Package để TÍNH TOÁN KPI ĐỘNG
   const baseFilteredList = equipList.filter(item => {
     const searchLower = searchTerm.toLowerCase();
     const matchSearch = (item.tag_no?.toLowerCase().includes(searchLower)) || (item.description?.toLowerCase().includes(searchLower)) || (item.package?.toLowerCase().includes(searchLower)) || (item.deck_level?.toLowerCase().includes(searchLower)) || (item.mrir_no?.toLowerCase().includes(searchLower)) || (item.notes?.toLowerCase().includes(searchLower));
@@ -272,7 +208,6 @@ export default function Matrix() {
     return matchSearch && matchDeck && matchPkg;
   });
 
-  // Số liệu KPI nhảy ĐỘNG theo kết quả của baseFilteredList
   const stats = { 
     total: baseFilteredList.length, 
     received: baseFilteredList.filter(isReceived).length,
@@ -281,7 +216,6 @@ export default function Matrix() {
     notDelivered: baseFilteredList.filter(i => !isReceived(i)).length
   };
 
-  // BỘ LỌC CẤP 2: Lọc tiếp theo Status (Nút bấm KPI) để hiển thị ra Bảng
   const statusFilteredList = baseFilteredList.filter(item => {
     if (statusFilters.length === 0) return true;
     return statusFilters.some(f => {
@@ -293,15 +227,16 @@ export default function Matrix() {
     });
   });
 
-  // SORTING: Xử lý sắp xếp dữ liệu trên mảng cuối cùng
-  const sortedList = [...statusFilteredList].sort((a, b) => {
-    if (!sortConfig.key) return 0;
-    const aVal = String(a[sortConfig.key] || '').toLowerCase();
-    const bVal = String(b[sortConfig.key] || '').toLowerCase();
-    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
+  // TỐI ƯU SORTING: Có numeric:true để TAG-2 đứng trước TAG-10
+  let sortedList = statusFilteredList;
+  if (sortConfig.key) {
+    sortedList = [...statusFilteredList].sort((a, b) => {
+      const aVal = String(a[sortConfig.key] || '');
+      const bVal = String(b[sortConfig.key] || '');
+      const compareResult = aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' });
+      return sortConfig.direction === 'asc' ? compareResult : -compareResult;
+    });
+  }
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -342,23 +277,14 @@ export default function Matrix() {
     if (!error) fetchData();
   };
 
-  // NÚT DELETE ALL TOÀN BỘ DATA
   const handleDeleteAllDatabase = async () => {
     if (deleteConfirmText !== 'DELETE') return alert("Vui lòng gõ chữ DELETE để xác nhận!");
     setIsImporting(true);
     try {
-      // Xóa tất cả các dòng (cần có filter neq để Supabase cho phép)
       const { error } = await supabase.from('master_equipment').delete().not('id', 'is', null);
       if (error) throw error;
-      setShowDeleteAllModal(false);
-      setDeleteConfirmText('');
-      fetchData();
-      alert("Đã xóa sạch cơ sở dữ liệu!");
-    } catch (err) {
-      alert("Lỗi khi xóa: " + err.message);
-    } finally {
-      setIsImporting(false);
-    }
+      setShowDeleteAllModal(false); setDeleteConfirmText(''); fetchData(); alert("Đã xóa sạch cơ sở dữ liệu!");
+    } catch (err) { alert("Lỗi khi xóa: " + err.message); } finally { setIsImporting(false); }
   };
 
   const handleLocalChange = (id, field, value) => setEquipList(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
@@ -386,9 +312,7 @@ export default function Matrix() {
           return { tag_no: (row['Tag No'] || row['Tag_No'] || row['TAG NO'] || '').toString().toUpperCase().trim(), package: (row['Package'] || '').toString().toUpperCase().trim(), description: (row['Description'] || '').toString().trim(), deck_level: (row['Deck Level'] || row['Deck'] || '').toString().toUpperCase().trim(), mrir_no: (row['MRIR No'] || '').toString().trim(), receiving_date: normalizeDate(row['Receiving Date']), installation_status: instData.status, installation_date: instData.date, welding_status: weldData.status, welding_date: weldData.date, bolting_status: boltData.status, bolting_date: boltData.date, dim_status: dimData.status, dim_date: dimData.date, leveling_status: levData.status, leveling_date: levData.date, align_status: alignData.status, align_date: alignData.date, notes: (row['Notes'] || '').toString().trim(), pres_initial_method: (row['Initial Method'] || row['Pres Method'] || '').toString().trim(), pres_alternate_method: (row['Alternate Method'] || '').toString().trim(), pres_checksheet: (row['Pres Checksheet'] || row['Checksheet'] || '').toString().trim(), pres_freq: (row['Freq'] || row['Frequency'] || '').toString().trim(), pres_start_date: normalizeDate(row['Pres Start Date'] || row['Receiving Date']), pres_last_date: normalizeDate(row['Last Done Date'] || row['Last Done']), pres_notes: (row['Pres Notes'] || '').toString().trim(), discipline: 'Mechanical', phase: 'CC' };
         }).filter(item => item.tag_no !== '');
         
-        // Lưu tạm vào mảng chờ và hiển thị Modal Option để người dùng chọn thứ tự xếp
-        setPendingImportData(payloads);
-        setShowImportOptionsModal(true);
+        setPendingImportData(payloads); setShowImportOptionsModal(true);
       } catch (err) { alert("Lỗi: " + err.message); } finally { setIsImporting(false); e.target.value = null; }
     }; reader.readAsArrayBuffer(file);
   };
@@ -397,23 +321,16 @@ export default function Matrix() {
     setIsImporting(true);
     let finalPayloads = [...pendingImportData];
     
-    // Tùy biến sắp xếp trước khi đẩy vào Database
-    if (importSortOption === 'TAG') finalPayloads.sort((a,b) => a.tag_no.localeCompare(b.tag_no));
-    else if (importSortOption === 'PKG') finalPayloads.sort((a,b) => (a.package||'').localeCompare(b.package||''));
-    else if (importSortOption === 'DECK') finalPayloads.sort((a,b) => (a.deck_level||'').localeCompare(b.deck_level||''));
-    // Nếu là ORIGINAL -> Bỏ qua, giữ nguyên thứ tự file gốc
+    // TỐI ƯU SORTING IMPORT: Có numeric:true để TAG-2 đúng chuẩn
+    if (importSortOption === 'TAG') finalPayloads.sort((a,b) => String(a.tag_no).localeCompare(String(b.tag_no), undefined, { numeric: true }));
+    else if (importSortOption === 'PKG') finalPayloads.sort((a,b) => String(a.package||'').localeCompare(String(b.package||''), undefined, { numeric: true }));
+    else if (importSortOption === 'DECK') finalPayloads.sort((a,b) => String(a.deck_level||'').localeCompare(String(b.deck_level||''), undefined, { numeric: true }));
 
     try {
       await supabase.from('master_equipment').insert(finalPayloads); 
       alert(`Đã Import thành công ${finalPayloads.length} thiết bị!`); 
-      setShowImportOptionsModal(false);
-      setPendingImportData([]);
-      fetchData();
-    } catch (err) { 
-      alert("Lỗi khi import: " + err.message); 
-    } finally {
-      setIsImporting(false);
-    }
+      setShowImportOptionsModal(false); setPendingImportData([]); fetchData();
+    } catch (err) { alert("Lỗi khi import: " + err.message); } finally { setIsImporting(false); }
   };
 
   const handleExportExcelSelection = (mode) => {
@@ -425,35 +342,12 @@ export default function Matrix() {
   };
 
   const exportToWord = () => { const printContent = document.getElementById('printable-matrix').innerHTML; const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Installation Matrix</title><style>@page { size: landscape; margin: 1cm; } table {width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 10px;} th, td {border: 1px solid black; padding: 4px; text-align: left; vertical-align: middle;} th {background-color: #f8fafc; font-weight: bold; text-align: center;}</style></head><body>`; const sourceHTML = header + printContent + `</body></html>`; const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML); const fileDownload = document.createElement("a"); document.body.appendChild(fileDownload); fileDownload.href = source; fileDownload.download = `Installation_Matrix_${new Date().toISOString().split('T')[0]}.doc`; fileDownload.click(); document.body.removeChild(fileDownload); };
-  
-  const exportToPDF = () => {
-    const printContent = document.getElementById('printable-matrix').innerHTML;
-    const originalContent = document.body.innerHTML;
-    document.body.innerHTML = `
-      <div id="print-container">
-        <style>
-          @media print {
-            body { background: white !important; margin: 0; padding: 0; }
-            #print-container { width: 100%; font-family: Arial, sans-serif; padding: 8mm; }
-            @page { size: A4 landscape; margin: 5mm; }
-            table { width: 100%; border-collapse: collapse; font-size: 8.5px; }
-            th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: middle; }
-            th { background-color: #f8fafc !important; font-weight: bold; text-transform: uppercase; text-align: center; }
-            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          }
-        </style>
-        ${printContent}
-      </div>`;
-    window.print();
-    document.body.innerHTML = originalContent;
-    window.location.reload(); 
-  };
+  const exportToPDF = () => { const printContent = document.getElementById('printable-matrix').innerHTML; const originalContent = document.body.innerHTML; document.body.innerHTML = `<div id="print-container"><style>@media print { body { background: white !important; margin: 0; padding: 0; } #print-container { width: 100%; font-family: Arial, sans-serif; padding: 8mm; } @page { size: A4 landscape; margin: 5mm; } table { width: 100%; border-collapse: collapse; font-size: 8.5px; } th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: middle; } th { background-color: #f8fafc !important; font-weight: bold; text-transform: uppercase; text-align: center; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }</style>${printContent}</div>`; window.print(); document.body.innerHTML = originalContent; window.location.reload(); };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden relative">
       <input type="file" accept=".xlsx, .xls, .csv" ref={importFileRef} className="hidden" onChange={handleFileSelect} />
 
-      {/* MODAL IMPORT OPTIONS */}
       {showImportOptionsModal && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -492,7 +386,6 @@ export default function Matrix() {
         </div>
       )}
 
-      {/* MODAL EXCEL EXPORT (Giữ Nguyên) */}
       {showExportModal && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
@@ -518,7 +411,6 @@ export default function Matrix() {
         </div>
       )}
 
-      {/* MODAL XÓA TẤT CẢ */}
       {showDeleteAllModal && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-red-500">
@@ -541,7 +433,6 @@ export default function Matrix() {
         </div>
       )}
 
-      {/* MODAL THÊM / SỬA (Giữ Nguyên) */}
       {showAddModal && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl"><div className="px-6 py-4 border-b flex justify-between items-center"><h3 className="font-black text-xl flex items-center gap-2"><Plus className="text-blue-600"/> Add New</h3><button onClick={()=>setShowAddModal(false)} className="p-2"><X size={20}/></button></div><form onSubmit={handleAddSubmit} className="p-6"><div className="bg-slate-50 p-5 rounded-xl border grid grid-cols-3 gap-4"><div className="col-span-1"><label className="text-xs font-bold uppercase">Tag No *</label><input required type="text" name="tag_no" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Package</label><input type="text" name="package" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Deck</label><input type="text" name="deck_level" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-3"><label className="text-xs font-bold uppercase">Description</label><input type="text" name="description" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" /></div></div><div className="flex justify-end gap-3 mt-4"><button type="button" onClick={()=>setShowAddModal(false)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button><button type="submit" className="px-8 py-2 font-bold text-white bg-blue-600 rounded-xl">Create</button></div></form></div></div>
       )}
@@ -549,7 +440,7 @@ export default function Matrix() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl"><div className="px-6 py-4 border-b flex justify-between items-center"><h3 className="font-black text-xl flex items-center gap-2"><Edit className="text-emerald-600"/> Edit</h3><button onClick={()=>setEditingItem(null)} className="p-2"><X size={20}/></button></div><form onSubmit={handleEditSubmit} className="p-6"><div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 grid grid-cols-3 gap-4"><div className="col-span-1"><label className="text-xs font-bold uppercase">Tag No *</label><input required type="text" value={editingItem.tag_no} onChange={(e)=>setEditingItem({...editingItem, tag_no: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Package</label><input type="text" value={editingItem.package || ''} onChange={(e)=>setEditingItem({...editingItem, package: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Deck</label><input type="text" value={editingItem.deck_level || ''} onChange={(e)=>setEditingItem({...editingItem, deck_level: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-3"><label className="text-xs font-bold uppercase">Description</label><input type="text" value={editingItem.description || ''} onChange={(e)=>setEditingItem({...editingItem, description: e.target.value})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" /></div></div><div className="flex justify-end gap-3 mt-4"><button type="button" onClick={()=>setEditingItem(null)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button><button type="submit" className="px-8 py-2 font-bold text-white bg-emerald-600 rounded-xl">Update</button></div></form></div></div>
       )}
 
-      {/* HEADER BỘ LỌC ĐỒNG BỘ MÀU CHUẨN */}
+      {/* HEADER BỘ LỌC */}
       <div className="flex-none border-b border-slate-200 p-3 px-6 flex justify-between items-center bg-white z-20 min-h-[70px]">
          <div className="flex gap-2 shrink-0">
            <button onClick={() => handleToggleFilter('All')} className={`flex flex-col items-center justify-center min-w-[75px] px-3 py-1.5 rounded-xl border transition-all ${statusFilters.length === 0 ? 'bg-purple-50 border-purple-300 shadow-inner' : 'bg-white border-slate-200 opacity-60 hover:opacity-100 hover:shadow-sm'}`}>
@@ -574,7 +465,6 @@ export default function Matrix() {
            </button>
          </div>
          
-         {/* ACTION BUTTONS */}
          <div className="flex items-center gap-2 shrink-0">
            <button onClick={() => setShowDeleteAllModal(true)} className="px-3 h-[36px] bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold text-xs rounded-md flex items-center gap-1 transition-colors mr-2">
              <Trash2 size={12}/> Clear Data
@@ -606,7 +496,7 @@ export default function Matrix() {
          </div>
       </div>
 
-      {/* LƯỚI DATA CÓ KÉO GIÃN VÀ CĂN GIỮA DỌC (ALIGN-MIDDLE) */}
+      {/* LƯỚI DATA */}
       <div className="flex-1 p-4 overflow-hidden min-w-0">
           <div className="w-full h-full overflow-auto bg-white shadow-sm border border-slate-300 rounded-lg">
             <table className="w-full text-left border-collapse min-w-max relative table-fixed">
@@ -636,22 +526,18 @@ export default function Matrix() {
                     </div>
                     <Resizer colKey="deck" />
                   </th>
-                  
                   <th style={{ width: colWidths.mrir }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
                     <div onClick={() => handleSort('mrir_no')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
                       MRIR & Rec {sortConfig.key === 'mrir_no' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
                     </div>
                     <Resizer colKey="mrir" />
                   </th>
-                  
                   <th style={{ width: colWidths.install }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">INSTALLATION <Resizer colKey="install" /></th>
-                  
                   <th style={{ width: colWidths.welding }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Welding <Resizer colKey="welding" /></th>
                   <th style={{ width: colWidths.bolting }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Bolting <Resizer colKey="bolting" /></th>
                   <th style={{ width: colWidths.dim }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Dim Check <Resizer colKey="dim" /></th>
                   <th style={{ width: colWidths.leveling }} className="p-3 border-r border-slate-300 sticky top-0 bg-sky-50/50 z-10 text-center text-slate-600">Leveling <Resizer colKey="leveling" /></th>
                   <th style={{ width: colWidths.align }} className="p-3 border-r border-slate-300 sticky top-0 bg-sky-50/50 z-10 text-center text-slate-600">Alignment <Resizer colKey="align" /></th>
-                  
                   <th style={{ width: colWidths.overall }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Overall <Resizer colKey="overall" /></th>
                   <th style={{ width: colWidths.notes }} className="p-3 sticky top-0 bg-slate-50 z-10 text-center">Notes</th>
                 </tr>
@@ -662,66 +548,33 @@ export default function Matrix() {
                   const isDuplicate = duplicateTags.has(item.tag_no?.trim().toUpperCase());
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 group">
-                      
-                      {/* SỬ DỤNG ALIGN-MIDDLE (CĂN GIỮA DỌC) CHO TẤT CẢ CÁC Ô */}
                       <td className={`p-3 border-r border-b border-slate-300 align-middle sticky left-0 z-10 bg-white group-hover:bg-slate-50 overflow-hidden text-left ${isDuplicate ? 'bg-red-50 border-y border-y-red-300' : ''}`}>
                         <div className="flex flex-col justify-center h-full gap-1.5">
                           <span className={`font-black text-sm w-full whitespace-normal break-words ${isDuplicate ? 'text-red-600' : 'text-slate-800'}`} title={item.tag_no}>{isDuplicate && <AlertCircle size={14} className="inline mr-1 animate-pulse"/>}{item.tag_no}</span>
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 shrink-0"><button onClick={() => setEditingItem(item)} className="p-1 border bg-white text-slate-400 hover:text-blue-600 rounded"><Edit size={12} /></button><button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 border bg-white text-slate-400 hover:text-red-600 rounded"><Trash2 size={12} /></button></div>
                         </div>
                       </td>
-                      
                       <td className="p-2 border-r border-b border-slate-300 align-middle text-left">
-                        <AutoResizeTextarea 
-                          value={item.package || ''} 
-                          onChange={(e) => handleLocalChange(item.id, 'package', e.target.value.toUpperCase())} 
-                          onBlur={(e) => saveToDatabase(item.id, 'package', e.target.value.toUpperCase())} 
-                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-[11px] uppercase rounded px-1 outline-none resize-none" 
-                        />
+                        <AutoResizeTextarea value={item.package || ''} onChange={(e) => handleLocalChange(item.id, 'package', e.target.value.toUpperCase())} onBlur={(e) => saveToDatabase(item.id, 'package', e.target.value.toUpperCase())} className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-[11px] uppercase rounded px-1 outline-none resize-none" />
                       </td>
-                      
                       <td className="p-2 border-r border-b border-slate-300 align-middle text-left">
-                        <AutoResizeTextarea 
-                          value={item.description || ''} 
-                          onChange={(e) => handleLocalChange(item.id, 'description', e.target.value)} 
-                          onBlur={(e) => saveToDatabase(item.id, 'description', e.target.value)} 
-                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-xs rounded px-1 outline-none resize-none" 
-                        />
+                        <AutoResizeTextarea value={item.description || ''} onChange={(e) => handleLocalChange(item.id, 'description', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'description', e.target.value)} className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-xs rounded px-1 outline-none resize-none" />
                       </td>
-                      
                       <td className="p-3 border-r border-b border-slate-300 align-middle text-left">
-                        <AutoResizeTextarea 
-                          value={item.deck_level || ''} 
-                          onChange={(e) => handleLocalChange(item.id, 'deck_level', e.target.value.toUpperCase())} 
-                          onBlur={(e) => saveToDatabase(item.id, 'deck_level', e.target.value.toUpperCase())} 
-                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-medium text-[11px] uppercase rounded px-1 outline-none resize-none" 
-                        />
+                        <AutoResizeTextarea value={item.deck_level || ''} onChange={(e) => handleLocalChange(item.id, 'deck_level', e.target.value.toUpperCase())} onBlur={(e) => saveToDatabase(item.id, 'deck_level', e.target.value.toUpperCase())} className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-medium text-[11px] uppercase rounded px-1 outline-none resize-none" />
                       </td>
-                      
                       <td className="p-2 border-r border-b border-slate-300 align-middle">
                         <MrirCell item={item} handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} />
                       </td>
-
-                      <td className="p-2 border-r border-b border-slate-300 align-middle">
-                        <MilestoneCell item={item} fieldPrefix="installation" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} />
-                      </td>
-                      
+                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="installation" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
                       <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="welding" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
                       <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="bolting" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
                       <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="dim" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
                       <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="leveling" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
                       <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="align" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      
                       <td className="p-3 border-r border-b border-slate-300 align-middle"><span className={`px-2 py-1.5 rounded text-[9px] uppercase block w-full text-center border ${rowStatus.style}`}>{rowStatus.label}</span></td>
-                      
                       <td className="p-3 border-b border-slate-300 align-middle text-left">
-                        <AutoResizeTextarea 
-                          value={item.notes || ''} 
-                          placeholder="Notes..." 
-                          onChange={(e) => handleLocalChange(item.id, 'notes', e.target.value)} 
-                          onBlur={(e) => saveToDatabase(item.id, 'notes', e.target.value)} 
-                          className="w-full px-1 py-1 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 rounded text-[10px] font-medium text-slate-500 outline-none resize-none text-left" 
-                        />
+                        <AutoResizeTextarea value={item.notes || ''} placeholder="Notes..." onChange={(e) => handleLocalChange(item.id, 'notes', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'notes', e.target.value)} className="w-full px-1 py-1 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 rounded text-[10px] font-medium text-slate-500 outline-none resize-none text-left" />
                       </td>
                     </tr>
                   );
@@ -731,27 +584,16 @@ export default function Matrix() {
           </div>
       </div>
 
-      {/* BẢNG IN CHUẨN ĐỒNG BỘ VỚI PRESERVATION TRACKER */}
+      {/* BẢNG IN CHUẨN */}
       <div id="printable-matrix" className="hidden">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid black', paddingBottom: '10px', marginBottom: '15px' }}>
           <div style={{ fontWeight: 'bold', fontSize: '12px' }}>MCDERMOTT<br/>PTSC</div>
-          <div style={{ textAlign: 'center', fontWeight: '900', fontSize: '18px', textTransform: 'uppercase' }}>
-            VIETNAM BLOCK B GAS PROJECT<br/>INSTALLATION PROGRESS MATRIX
-          </div>
-          <div style={{ fontWeight: 'bold', fontSize: '12px', textAlign: 'right' }}>
-            PETROVIETNAM<br/>PQPOC
-            <div style={{ fontWeight: 'normal', fontSize: '10px', marginTop: '4px' }}>Printed: {formatToExcelDate(new Date().toISOString())}</div>
-          </div>
+          <div style={{ textAlign: 'center', fontWeight: '900', fontSize: '18px', textTransform: 'uppercase' }}>VIETNAM BLOCK B GAS PROJECT<br/>INSTALLATION PROGRESS MATRIX</div>
+          <div style={{ fontWeight: 'bold', fontSize: '12px', textAlign: 'right' }}>PETROVIETNAM<br/>PQPOC<div style={{ fontWeight: 'normal', fontSize: '10px', marginTop: '4px' }}>Printed: {formatToExcelDate(new Date().toISOString())}</div></div>
         </div>
-
         <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', fontWeight: 'bold', fontSize: '12px', backgroundColor: '#f1f5f9', padding: '10px', border: '1px solid black' }}>
-          <span style={{ color: '#7e22ce' }}>TOTAL: {stats.total}</span>
-          <span style={{ color: '#0284c7' }}>RECEIVED: {stats.received}</span>
-          <span style={{ color: '#2563eb' }}>INSTALLED: {stats.installed}</span>
-          <span style={{ color: '#64748b' }}>NOT DELIVERED: {stats.notDelivered}</span>
-          <span style={{ color: '#059669' }}>COMPLETED: {stats.completed}</span>
+          <span style={{ color: '#7e22ce' }}>TOTAL: {stats.total}</span><span style={{ color: '#0284c7' }}>RECEIVED: {stats.received}</span><span style={{ color: '#2563eb' }}>INSTALLED: {stats.installed}</span><span style={{ color: '#64748b' }}>NOT DELIVERED: {stats.notDelivered}</span><span style={{ color: '#059669' }}>COMPLETED: {stats.completed}</span>
         </div>
-
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
           <thead>
             <tr>
@@ -772,24 +614,12 @@ export default function Matrix() {
           </thead>
           <tbody>
             {sortedList.map(item => {
-              const instStatus = item.installation_status || 'NOT YET';
-              const instDate = item.installation_date ? `\n(${formatToExcelDate(item.installation_date)})` : '';
-              
-              const weldStatus = item.welding_status === 'Completed' ? 'DONE' : (item.welding_status || 'NOT YET');
-              const weldDate = item.welding_date ? `\n(${formatToExcelDate(item.welding_date)})` : '';
-
-              const boltStatus = item.bolting_status === 'Completed' ? 'DONE' : (item.bolting_status || 'NOT YET');
-              const boltDate = item.bolting_date ? `\n(${formatToExcelDate(item.bolting_date)})` : '';
-
-              const dimStatus = item.dim_status === 'Completed' ? 'DONE' : (item.dim_status || 'NOT YET');
-              const dimDate = item.dim_date ? `\n(${formatToExcelDate(item.dim_date)})` : '';
-
-              const levStatus = item.leveling_status === 'Completed' ? 'DONE' : (item.leveling_status || 'NOT YET');
-              const levDate = item.leveling_date ? `\n(${formatToExcelDate(item.leveling_date)})` : '';
-
-              const alignStatus = item.align_status === 'Completed' ? 'DONE' : (item.align_status || 'NOT YET');
-              const alignDate = item.align_date ? `\n(${formatToExcelDate(item.align_date)})` : '';
-
+              const instStatus = item.installation_status || 'NOT YET'; const instDate = item.installation_date ? `\n(${formatToExcelDate(item.installation_date)})` : '';
+              const weldStatus = item.welding_status === 'Completed' ? 'DONE' : (item.welding_status || 'NOT YET'); const weldDate = item.welding_date ? `\n(${formatToExcelDate(item.welding_date)})` : '';
+              const boltStatus = item.bolting_status === 'Completed' ? 'DONE' : (item.bolting_status || 'NOT YET'); const boltDate = item.bolting_date ? `\n(${formatToExcelDate(item.bolting_date)})` : '';
+              const dimStatus = item.dim_status === 'Completed' ? 'DONE' : (item.dim_status || 'NOT YET'); const dimDate = item.dim_date ? `\n(${formatToExcelDate(item.dim_date)})` : '';
+              const levStatus = item.leveling_status === 'Completed' ? 'DONE' : (item.leveling_status || 'NOT YET'); const levDate = item.leveling_date ? `\n(${formatToExcelDate(item.leveling_date)})` : '';
+              const alignStatus = item.align_status === 'Completed' ? 'DONE' : (item.align_status || 'NOT YET'); const alignDate = item.align_date ? `\n(${formatToExcelDate(item.align_date)})` : '';
               return (
                 <tr key={`print-${item.id}`}>
                   <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'left', verticalAlign: 'middle' }}>{item.tag_no}</td>
@@ -798,14 +628,12 @@ export default function Matrix() {
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.deck_level}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', color: '#1d4ed8', fontWeight: 'bold', verticalAlign: 'middle' }}>{item.mrir_no}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', verticalAlign: 'middle' }}>{formatToExcelDate(item.receiving_date)}</td>
-                  
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{instStatus === 'Completed' ? 'DONE' : instStatus}{instDate}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{weldStatus}{weldDate}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{boltStatus}{boltDate}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{dimStatus}{dimDate}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{levStatus}{levDate}</td>
                   <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{alignStatus}{alignDate}</td>
-                  
                   <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>{calculateRowStatus(item).label}</td>
                 </tr>
               )
