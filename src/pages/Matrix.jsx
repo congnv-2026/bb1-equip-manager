@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Plus, X, Save, Paperclip, FileCheck, Download, Filter, Edit, Loader, Trash2, Upload, AlertCircle, FileSpreadsheet, LayoutGrid, Database, Printer, RefreshCw } from 'lucide-react';
+import { Search, Plus, X, Save, Paperclip, FileCheck, Download, Filter, Edit, Loader, Trash2, Upload, AlertCircle, FileSpreadsheet, LayoutGrid, Database, Printer, RefreshCw, AlertTriangle } from 'lucide-react';
 import { supabase } from '../supabase';
 import * as XLSX from 'xlsx';
 
@@ -26,7 +26,7 @@ const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) 
 };
 
 // ==========================================
-// COMPONENT: Ô TEXT TỰ ĐỘNG CO GIÃN CHIỀU CAO (CẢM BIẾN PIXEL)
+// COMPONENT: Ô TEXT TỰ ĐỘNG CO GIÃN CHIỀU CAO
 // ==========================================
 const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder }) => {
   const textareaRef = useRef(null);
@@ -113,22 +113,12 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
   }
 
   const isDateEnabled = mrirNo.trim().length > 0;
-  
-  const inputStyle = isDateEnabled 
-      ? 'bg-emerald-50 text-emerald-700 border-emerald-300 focus:border-emerald-500 placeholder:text-emerald-300' 
-      : 'bg-white text-slate-700 border-slate-300 focus:border-blue-400 hover:bg-slate-50';
+  const inputStyle = isDateEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-300 focus:border-emerald-500 placeholder:text-emerald-300' : 'bg-white text-slate-700 border-slate-300 focus:border-blue-400 hover:bg-slate-50';
   
   return (
     <div className="flex flex-col gap-1 w-full bg-white p-1 rounded border border-slate-300 shadow-sm">
       <div className="flex items-center gap-1">
-        <input 
-          type="text" 
-          value={mrirNo} 
-          placeholder="MRIR..." 
-          onChange={(e) => handleLocalChange(item.id, 'mrir_no', e.target.value)} 
-          onBlur={handleMrirBlur} 
-          className={`flex-1 px-1.5 py-1 border rounded text-[10px] font-black uppercase outline-none text-left transition-colors min-w-0 ${inputStyle}`} 
-        />
+        <input type="text" value={mrirNo} placeholder="MRIR..." onChange={(e) => handleLocalChange(item.id, 'mrir_no', e.target.value)} onBlur={handleMrirBlur} className={`flex-1 px-1.5 py-1 border rounded text-[10px] font-black uppercase outline-none text-left transition-colors min-w-0 ${inputStyle}`} />
         {isUploading ? (
             <div className="p-1.5 bg-slate-50 border border-slate-200 w-[26px] h-[26px] flex items-center justify-center rounded"><Loader size={12} className="animate-spin text-blue-600"/></div>
         ) : hasFile ? (
@@ -141,21 +131,7 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
         )}
         <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} />
       </div>
-
-      <CustomDateInput 
-        value={recDate} 
-        placeholder="Rec Date" 
-        disabled={!isDateEnabled}
-        onChange={(val) => { 
-          handleLocalChange(item.id, 'receiving_date', val); 
-          saveToDatabase(item.id, 'receiving_date', val); 
-          if(val && item.pres_required !== 'Yes') { 
-              handleLocalChange(item.id, 'pres_required', 'Yes'); 
-              saveToDatabase(item.id, 'pres_required', 'Yes'); 
-          } 
-        }} 
-        className={`w-full px-1.5 py-1 border rounded text-[11px] font-bold text-left outline-none transition-colors ${isDateEnabled ? (recDate ? 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:border-blue-400' : 'bg-white text-slate-500 border-slate-300 cursor-pointer hover:border-blue-400') : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`} 
-      />
+      <CustomDateInput value={recDate} placeholder="Rec Date" disabled={!isDateEnabled} onChange={(val) => { handleLocalChange(item.id, 'receiving_date', val); saveToDatabase(item.id, 'receiving_date', val); if(val && item.pres_required !== 'Yes') { handleLocalChange(item.id, 'pres_required', 'Yes'); saveToDatabase(item.id, 'pres_required', 'Yes'); } }} className={`w-full px-1.5 py-1 border rounded text-[11px] font-bold text-left outline-none transition-colors ${isDateEnabled ? (recDate ? 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:border-blue-400' : 'bg-white text-slate-500 border-slate-300 cursor-pointer hover:border-blue-400') : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`} />
     </div>
   );
 };
@@ -214,12 +190,7 @@ const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase })
         {isUploading ? <div className="p-1.5 bg-slate-50 border border-slate-200 w-[26px] h-[26px] flex items-center justify-center rounded"><Loader size={12} className="animate-spin text-blue-600"/></div> : hasFile ? <div className="flex h-[26px] border border-emerald-300 rounded overflow-hidden"><button onClick={()=>window.open(fileUrl)} className="px-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"><FileCheck size={12}/></button><button onClick={handleRemoveFile} className="px-1 bg-white hover:bg-red-50 text-red-400 hover:text-red-500 border-l border-emerald-300 transition-colors"><X size={10} strokeWidth={3}/></button></div> : <button onClick={()=>fileInputRef.current.click()} className="p-1.5 border border-slate-300 bg-white hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 w-[26px] h-[26px] flex items-center justify-center rounded text-slate-400 transition-colors"><Paperclip size={12}/></button>}
         <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} />
       </div>
-      <CustomDateInput 
-          value={currentDate} 
-          onChange={handleDateChange} 
-          disabled={!isDateEnabled} 
-          className={`w-full px-1.5 py-1 border rounded text-[11px] font-bold text-left outline-none transition-colors ${isDateEnabled ? (currentDate ? 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:border-blue-400' : 'bg-white text-slate-500 border-slate-300 cursor-pointer hover:border-blue-400') : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`} 
-      />
+      <CustomDateInput value={currentDate} onChange={handleDateChange} disabled={!isDateEnabled} className={`w-full px-1.5 py-1 border rounded text-[11px] font-bold text-left outline-none transition-colors ${isDateEnabled ? (currentDate ? 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:border-blue-400' : 'bg-white text-slate-500 border-slate-300 cursor-pointer hover:border-blue-400') : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'}`} />
     </div>
   );
 };
@@ -229,26 +200,41 @@ const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase })
 // ==========================================
 export default function Matrix() {
   const [equipList, setEquipList] = useState([]);
+  
+  // States Lọc & Hiển thị
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDeck, setFilterDeck] = useState('All');
+  const [filterPkg, setFilterPkg] = useState('All'); // Mới: Filter Package
   const [statusFilters, setStatusFilters] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // Mới: Sorting
+  
+  // States Giao diện & Modal
+  const [colWidths, setColWidths] = useState({ tag: 160, pkg: 105, desc: 220, deck: 130, mrir: 140, install: 125, welding: 125, bolting: 125, dim: 125, leveling: 125, align: 125, overall: 110, notes: 180 });
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [isImporting, setIsImporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-
-  const [colWidths, setColWidths] = useState({
-    tag: 160, pkg: 105, desc: 220, deck: 130, mrir: 140, install: 125, welding: 125, bolting: 125, dim: 125, leveling: 125, align: 125, overall: 110, notes: 180
-  });
+  
+  // States Import
   const importFileRef = useRef(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState([]);
+  const [showImportOptionsModal, setShowImportOptionsModal] = useState(false);
+  const [importSortOption, setImportSortOption] = useState('ORIGINAL');
+
+  // States Delete All
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
   const [formData, setFormData] = useState({ tag_no: '', description: '', package: '', deck_level: '', mrir_no: '', receiving_date: '', installation_date: '', notes: '' });
 
   async function fetchData() {
-    const { data: listData } = await supabase.from('master_equipment').select('*').order('tag_no', { ascending: true });
+    // Sửa đổi: Lấy dữ liệu theo ID (Thứ tự thêm vào) thay vì ép theo tag_no
+    const { data: listData } = await supabase.from('master_equipment').select('*').order('id', { ascending: true });
     if (listData) setEquipList(listData);
   }
   useEffect(() => { fetchData(); }, []);
 
+  // Các hàm kiểm tra trạng thái
   const isReceived = (item) => !!item.receiving_date || !!item.mrir_no;
   const isInstalled = (item) => item.installation_status === 'Completed' || item.installation_status === 'N/A' || !!item.installation_date;
   const isCompleted = (item) => {
@@ -264,8 +250,10 @@ export default function Matrix() {
     return { label: 'NOT DELIVERED', style: 'bg-slate-50 text-slate-500 border-slate-200 font-bold' };
   };
 
+  // Trích xuất các list duy nhất cho Dropdown Filter
   const uniqueDecks = ['All', ...new Set(equipList.map(item => item.deck_level).filter(Boolean))];
-  
+  const uniquePkgs = ['All', ...new Set(equipList.map(item => item.package).filter(Boolean))];
+
   const duplicateTags = useMemo(() => {
     const tagCounts = equipList.reduce((acc, item) => {
       const tag = item.tag_no?.trim().toUpperCase();
@@ -275,47 +263,65 @@ export default function Matrix() {
     return new Set(Object.keys(tagCounts).filter(tag => tagCounts[tag] > 1));
   }, [equipList]);
 
-  const filteredList = equipList.filter(item => {
+  // BỘ LỌC CẤP 1: Xử lý Search, Deck, Package để TÍNH TOÁN KPI ĐỘNG
+  const baseFilteredList = equipList.filter(item => {
     const searchLower = searchTerm.toLowerCase();
     const matchSearch = (item.tag_no?.toLowerCase().includes(searchLower)) || (item.description?.toLowerCase().includes(searchLower)) || (item.package?.toLowerCase().includes(searchLower)) || (item.deck_level?.toLowerCase().includes(searchLower)) || (item.mrir_no?.toLowerCase().includes(searchLower)) || (item.notes?.toLowerCase().includes(searchLower));
     const matchDeck = filterDeck === 'All' || item.deck_level === filterDeck;
-    
-    let matchStatus = true;
-    if (statusFilters.length > 0) {
-      matchStatus = statusFilters.some(f => {
-        if (f === 'RECEIVED') return isReceived(item);
-        if (f === 'INSTALLED') return isInstalled(item);
-        if (f === 'COMPLETED') return isCompleted(item);
-        if (f === 'NOT DELIVERED') return !isReceived(item);
-        return false;
-      });
-    }
-    return matchSearch && matchDeck && matchStatus;
+    const matchPkg = filterPkg === 'All' || item.package === filterPkg;
+    return matchSearch && matchDeck && matchPkg;
   });
 
+  // Số liệu KPI nhảy ĐỘNG theo kết quả của baseFilteredList
   const stats = { 
-    total: equipList.length, 
-    received: equipList.filter(isReceived).length,
-    installed: equipList.filter(isInstalled).length,
-    completed: equipList.filter(isCompleted).length,
-    notDelivered: equipList.filter(i => !isReceived(i)).length
+    total: baseFilteredList.length, 
+    received: baseFilteredList.filter(isReceived).length,
+    installed: baseFilteredList.filter(isInstalled).length,
+    completed: baseFilteredList.filter(isCompleted).length,
+    notDelivered: baseFilteredList.filter(i => !isReceived(i)).length
+  };
+
+  // BỘ LỌC CẤP 2: Lọc tiếp theo Status (Nút bấm KPI) để hiển thị ra Bảng
+  const statusFilteredList = baseFilteredList.filter(item => {
+    if (statusFilters.length === 0) return true;
+    return statusFilters.some(f => {
+      if (f === 'RECEIVED') return isReceived(item);
+      if (f === 'INSTALLED') return isInstalled(item);
+      if (f === 'COMPLETED') return isCompleted(item);
+      if (f === 'NOT DELIVERED') return !isReceived(item);
+      return false;
+    });
+  });
+
+  // SORTING: Xử lý sắp xếp dữ liệu trên mảng cuối cùng
+  const sortedList = [...statusFilteredList].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    const aVal = String(a[sortConfig.key] || '').toLowerCase();
+    const bVal = String(b[sortConfig.key] || '').toLowerCase();
+    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    setSortConfig({ key, direction });
   };
 
   const handleToggleFilter = (filterKey) => {
     if (filterKey === 'All') setStatusFilters([]);
-    else {
-      setStatusFilters(prev => prev.includes(filterKey) ? prev.filter(k => k !== filterKey) : [...prev, filterKey]);
-    }
+    else setStatusFilters(prev => prev.includes(filterKey) ? prev.filter(k => k !== filterKey) : [...prev, filterKey]);
   };
 
   const handleResizeStart = (e, colKey) => {
-    e.preventDefault();
+    e.preventDefault(); e.stopPropagation();
     const startX = e.clientX; const startWidth = colWidths[colKey];
     const doDrag = (dragEvent) => { requestAnimationFrame(() => { setColWidths(prev => ({ ...prev, [colKey]: Math.max(60, startWidth + (dragEvent.clientX - startX)) })); }); };
     const stopDrag = () => { document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); };
     document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag);
   };
-  const Resizer = ({ colKey }) => <div onMouseDown={(e) => handleResizeStart(e, colKey)} className="absolute top-0 right-0 w-[6px] h-full cursor-col-resize hover:bg-blue-400 z-30 transition-colors" style={{ transform: 'translateX(50%)' }} />;
+  const Resizer = ({ colKey }) => <div onMouseDown={(e) => handleResizeStart(e, colKey)} onClick={(e) => e.stopPropagation()} className="absolute top-0 right-0 w-[6px] h-full cursor-col-resize hover:bg-blue-400 z-30 transition-colors" style={{ transform: 'translateX(50%)' }} />;
 
   const handleModalInputChange = (e) => { const val = ['tag_no', 'package', 'deck_level'].includes(e.target.name) ? e.target.value.toUpperCase() : e.target.value; setFormData({ ...formData, [e.target.name]: val }); };
 
@@ -333,14 +339,34 @@ export default function Matrix() {
   const handleDeleteEquipment = async (id, tagNo) => {
     if (!window.confirm(`Xóa vĩnh viễn thiết bị [${tagNo}]?`)) return;
     const { error } = await supabase.from('master_equipment').delete().eq('id', id);
-    if (!error) setEquipList(equipList.filter(item => item.id !== id));
+    if (!error) fetchData();
+  };
+
+  // NÚT DELETE ALL TOÀN BỘ DATA
+  const handleDeleteAllDatabase = async () => {
+    if (deleteConfirmText !== 'DELETE') return alert("Vui lòng gõ chữ DELETE để xác nhận!");
+    setIsImporting(true);
+    try {
+      // Xóa tất cả các dòng (cần có filter neq để Supabase cho phép)
+      const { error } = await supabase.from('master_equipment').delete().not('id', 'is', null);
+      if (error) throw error;
+      setShowDeleteAllModal(false);
+      setDeleteConfirmText('');
+      fetchData();
+      alert("Đã xóa sạch cơ sở dữ liệu!");
+    } catch (err) {
+      alert("Lỗi khi xóa: " + err.message);
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleLocalChange = (id, field, value) => setEquipList(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
   const saveToDatabase = async (id, field, value) => { try { const finalValue = (field.includes('date') && value === '') ? null : value; await supabase.from('master_equipment').update({ [field]: finalValue }).eq('id', id); } catch (err) {} };
 
-  const handleImportExcel = async (e) => {
-    const file = e.target.files[0]; if (!file) return; setIsImporting(true);
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0]; if (!file) return; 
+    setIsImporting(true);
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
@@ -359,20 +385,46 @@ export default function Matrix() {
           const instData = normalizeStatusAndDate(row['Install Date'] || row['Installation']); const weldData = normalizeStatusAndDate(row['Welding']); const boltData = normalizeStatusAndDate(row['Bolting']); const dimData = normalizeStatusAndDate(row['Dim Check']); const levData = normalizeStatusAndDate(row['Leveling']); const alignData = normalizeStatusAndDate(row['Alignment']);
           return { tag_no: (row['Tag No'] || row['Tag_No'] || row['TAG NO'] || '').toString().toUpperCase().trim(), package: (row['Package'] || '').toString().toUpperCase().trim(), description: (row['Description'] || '').toString().trim(), deck_level: (row['Deck Level'] || row['Deck'] || '').toString().toUpperCase().trim(), mrir_no: (row['MRIR No'] || '').toString().trim(), receiving_date: normalizeDate(row['Receiving Date']), installation_status: instData.status, installation_date: instData.date, welding_status: weldData.status, welding_date: weldData.date, bolting_status: boltData.status, bolting_date: boltData.date, dim_status: dimData.status, dim_date: dimData.date, leveling_status: levData.status, leveling_date: levData.date, align_status: alignData.status, align_date: alignData.date, notes: (row['Notes'] || '').toString().trim(), pres_initial_method: (row['Initial Method'] || row['Pres Method'] || '').toString().trim(), pres_alternate_method: (row['Alternate Method'] || '').toString().trim(), pres_checksheet: (row['Pres Checksheet'] || row['Checksheet'] || '').toString().trim(), pres_freq: (row['Freq'] || row['Frequency'] || '').toString().trim(), pres_start_date: normalizeDate(row['Pres Start Date'] || row['Receiving Date']), pres_last_date: normalizeDate(row['Last Done Date'] || row['Last Done']), pres_notes: (row['Pres Notes'] || '').toString().trim(), discipline: 'Mechanical', phase: 'CC' };
         }).filter(item => item.tag_no !== '');
-        await supabase.from('master_equipment').insert(payloads); alert(`Thành công ${payloads.length} dòng!`); fetchData();
+        
+        // Lưu tạm vào mảng chờ và hiển thị Modal Option để người dùng chọn thứ tự xếp
+        setPendingImportData(payloads);
+        setShowImportOptionsModal(true);
       } catch (err) { alert("Lỗi: " + err.message); } finally { setIsImporting(false); e.target.value = null; }
     }; reader.readAsArrayBuffer(file);
   };
 
+  const handleConfirmImport = async () => {
+    setIsImporting(true);
+    let finalPayloads = [...pendingImportData];
+    
+    // Tùy biến sắp xếp trước khi đẩy vào Database
+    if (importSortOption === 'TAG') finalPayloads.sort((a,b) => a.tag_no.localeCompare(b.tag_no));
+    else if (importSortOption === 'PKG') finalPayloads.sort((a,b) => (a.package||'').localeCompare(b.package||''));
+    else if (importSortOption === 'DECK') finalPayloads.sort((a,b) => (a.deck_level||'').localeCompare(b.deck_level||''));
+    // Nếu là ORIGINAL -> Bỏ qua, giữ nguyên thứ tự file gốc
+
+    try {
+      await supabase.from('master_equipment').insert(finalPayloads); 
+      alert(`Đã Import thành công ${finalPayloads.length} thiết bị!`); 
+      setShowImportOptionsModal(false);
+      setPendingImportData([]);
+      fetchData();
+    } catch (err) { 
+      alert("Lỗi khi import: " + err.message); 
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleExportExcelSelection = (mode) => {
     let dataToExport = [];
-    if (mode === 'INSTALL_ONLY') { dataToExport = filteredList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Installation': item.installation_date ? formatToExcelDate(item.installation_date) : item.installation_status, 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Overall Status': calculateRowStatus(item).label, 'Notes': item.notes })); }
-    else if (mode === 'PRES_ONLY') { dataToExport = filteredList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Pres Notes': item.pres_notes })); }
-    else { dataToExport = filteredList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Installation': item.installation_date ? formatToExcelDate(item.installation_date) : item.installation_status, 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Pres Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Overall Status': calculateRowStatus(item).label, 'Notes': item.notes, 'Pres Notes': item.pres_notes })); }
+    if (mode === 'INSTALL_ONLY') { dataToExport = sortedList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Installation': item.installation_date ? formatToExcelDate(item.installation_date) : item.installation_status, 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Overall Status': calculateRowStatus(item).label, 'Notes': item.notes })); }
+    else if (mode === 'PRES_ONLY') { dataToExport = sortedList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Pres Notes': item.pres_notes })); }
+    else { dataToExport = sortedList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Installation': item.installation_date ? formatToExcelDate(item.installation_date) : item.installation_status, 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Pres Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Overall Status': calculateRowStatus(item).label, 'Notes': item.notes, 'Pres Notes': item.pres_notes })); }
     const ws = XLSX.utils.json_to_sheet(dataToExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Export"); XLSX.writeFile(wb, `${mode}_Matrix.xlsx`); setShowExportModal(false); 
   };
 
-  const exportToWord = () => { const printContent = document.getElementById('printable-matrix').innerHTML; const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Installation Matrix</title><style>@page { size: landscape; margin: 1cm; } table {width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 10px;} th, td {border: 1px solid black; padding: 4px; text-align: left;} th {background-color: #f8fafc; font-weight: bold; text-align: center;}</style></head><body>`; const sourceHTML = header + printContent + `</body></html>`; const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML); const fileDownload = document.createElement("a"); document.body.appendChild(fileDownload); fileDownload.href = source; fileDownload.download = `Installation_Matrix_${new Date().toISOString().split('T')[0]}.doc`; fileDownload.click(); document.body.removeChild(fileDownload); };
+  const exportToWord = () => { const printContent = document.getElementById('printable-matrix').innerHTML; const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Installation Matrix</title><style>@page { size: landscape; margin: 1cm; } table {width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 10px;} th, td {border: 1px solid black; padding: 4px; text-align: left; vertical-align: middle;} th {background-color: #f8fafc; font-weight: bold; text-align: center;}</style></head><body>`; const sourceHTML = header + printContent + `</body></html>`; const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML); const fileDownload = document.createElement("a"); document.body.appendChild(fileDownload); fileDownload.href = source; fileDownload.download = `Installation_Matrix_${new Date().toISOString().split('T')[0]}.doc`; fileDownload.click(); document.body.removeChild(fileDownload); };
   
   const exportToPDF = () => {
     const printContent = document.getElementById('printable-matrix').innerHTML;
@@ -385,9 +437,8 @@ export default function Matrix() {
             #print-container { width: 100%; font-family: Arial, sans-serif; padding: 8mm; }
             @page { size: A4 landscape; margin: 5mm; }
             table { width: 100%; border-collapse: collapse; font-size: 8.5px; }
-            th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: top; }
+            th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: middle; }
             th { background-color: #f8fafc !important; font-weight: bold; text-transform: uppercase; text-align: center; }
-            .text-left { text-align: left !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           }
         </style>
@@ -400,9 +451,48 @@ export default function Matrix() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden relative">
-      <input type="file" accept=".xlsx, .xls, .csv" ref={importFileRef} className="hidden" onChange={handleImportExcel} />
+      <input type="file" accept=".xlsx, .xls, .csv" ref={importFileRef} className="hidden" onChange={handleFileSelect} />
 
-      {/* MODAL EXCEL */}
+      {/* MODAL IMPORT OPTIONS */}
+      {showImportOptionsModal && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between bg-slate-50 items-center">
+              <h3 className="font-black text-xl text-slate-800 flex items-center gap-2"><Upload className="text-blue-600" size={24}/> Import Setup</h3>
+              <button onClick={() => {setShowImportOptionsModal(false); setPendingImportData([]);}} className="text-slate-400 hover:text-red-500 p-2"><X size={20} /></button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4 font-medium">Bạn chuẩn bị đưa <span className="font-black text-blue-600">{pendingImportData.length}</span> thiết bị vào Database. Bạn muốn sắp xếp chúng như thế nào?</p>
+              <div className="space-y-3">
+                <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${importSortOption === 'ORIGINAL' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="importSort" checked={importSortOption === 'ORIGINAL'} onChange={() => setImportSortOption('ORIGINAL')} className="w-4 h-4 text-blue-600"/>
+                  <span className="font-bold text-slate-700 text-sm">Giữ nguyên thứ tự file gốc Excel</span>
+                </label>
+                <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${importSortOption === 'TAG' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="importSort" checked={importSortOption === 'TAG'} onChange={() => setImportSortOption('TAG')} className="w-4 h-4 text-blue-600"/>
+                  <span className="font-bold text-slate-700 text-sm">Tự động xếp theo Tag No (A-Z)</span>
+                </label>
+                <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${importSortOption === 'PKG' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="importSort" checked={importSortOption === 'PKG'} onChange={() => setImportSortOption('PKG')} className="w-4 h-4 text-blue-600"/>
+                  <span className="font-bold text-slate-700 text-sm">Tự động xếp theo Package</span>
+                </label>
+                <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${importSortOption === 'DECK' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="importSort" checked={importSortOption === 'DECK'} onChange={() => setImportSortOption('DECK')} className="w-4 h-4 text-blue-600"/>
+                  <span className="font-bold text-slate-700 text-sm">Tự động xếp theo Deck</span>
+                </label>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <button onClick={() => {setShowImportOptionsModal(false); setPendingImportData([]);}} className="px-5 py-2 font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200">Hủy bỏ</button>
+                <button onClick={handleConfirmImport} disabled={isImporting} className="px-5 py-2 font-bold text-white bg-blue-600 rounded-xl flex items-center gap-2 hover:bg-blue-700">
+                  {isImporting ? <Loader size={16} className="animate-spin"/> : <Save size={16}/>} Bắt đầu Import
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EXCEL EXPORT (Giữ Nguyên) */}
       {showExportModal && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
@@ -428,75 +518,35 @@ export default function Matrix() {
         </div>
       )}
 
-      {/* MODAL THÊM / SỬA */}
-      {showAddModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl">
-            <div className="px-6 py-4 border-b flex justify-between items-center">
-              <h3 className="font-black text-xl flex items-center gap-2"><Plus className="text-blue-600"/> Add New</h3>
-              <button onClick={()=>setShowAddModal(false)} className="p-2"><X size={20}/></button>
+      {/* MODAL XÓA TẤT CẢ */}
+      {showDeleteAllModal && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-red-500">
+            <div className="bg-red-50 px-6 py-4 border-b border-red-100 flex justify-between items-center">
+              <h3 className="font-black text-xl text-red-700 flex items-center gap-2"><AlertTriangle className="text-red-600" size={24}/> NGUY HIỂM!</h3>
+              <button onClick={() => setShowDeleteAllModal(false)} className="text-red-400 hover:text-red-600 p-2"><X size={20} /></button>
             </div>
-            <form onSubmit={handleAddSubmit} className="p-6">
-              <div className="bg-slate-50 p-5 rounded-xl border grid grid-cols-3 gap-4">
-                <div className="col-span-1">
-                  <label className="text-xs font-bold uppercase">Tag No *</label>
-                  <input required type="text" name="tag_no" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs font-bold uppercase">Package</label>
-                  <input type="text" name="package" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs font-bold uppercase">Deck</label>
-                  <input type="text" name="deck_level" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" />
-                </div>
-                <div className="col-span-3">
-                  <label className="text-xs font-bold uppercase">Description</label>
-                  <input type="text" name="description" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" />
-                </div>
+            <div className="p-6">
+              <p className="text-sm font-bold text-slate-700 mb-2">Bạn đang chuẩn bị <span className="text-red-600 uppercase underline">XÓA SẠCH VĨNH VIỄN</span> toàn bộ cơ sở dữ liệu ({equipList.length} thiết bị).</p>
+              <p className="text-xs text-slate-500 mb-6 font-medium">Hành động này không thể hoàn tác. Để xác nhận, vui lòng gõ chính xác chữ <strong className="text-black">DELETE</strong> vào ô bên dưới.</p>
+              <input type="text" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} placeholder="Nhập DELETE..." className="w-full border-2 border-red-200 focus:border-red-500 rounded-lg px-4 py-2 font-black text-red-600 outline-none text-center mb-6 placeholder:font-normal placeholder:text-slate-300"/>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => {setShowDeleteAllModal(false); setDeleteConfirmText('');}} className="px-5 py-2 font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200">Hủy</button>
+                <button onClick={handleDeleteAllDatabase} disabled={isImporting || deleteConfirmText !== 'DELETE'} className={`px-5 py-2 font-black text-white rounded-xl flex items-center gap-2 ${deleteConfirmText === 'DELETE' ? 'bg-red-600 hover:bg-red-700 shadow-lg shadow-red-500/30' : 'bg-red-300 cursor-not-allowed'}`}>
+                  {isImporting ? <Loader size={16} className="animate-spin"/> : <Trash2 size={16}/>} XÓA TẤT CẢ
+                </button>
               </div>
-              <div className="flex justify-end gap-3 mt-4">
-                <button type="button" onClick={()=>setShowAddModal(false)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button>
-                <button type="submit" className="px-8 py-2 font-bold text-white bg-blue-600 rounded-xl">Create</button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
+      {/* MODAL THÊM / SỬA (Giữ Nguyên) */}
+      {showAddModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl"><div className="px-6 py-4 border-b flex justify-between items-center"><h3 className="font-black text-xl flex items-center gap-2"><Plus className="text-blue-600"/> Add New</h3><button onClick={()=>setShowAddModal(false)} className="p-2"><X size={20}/></button></div><form onSubmit={handleAddSubmit} className="p-6"><div className="bg-slate-50 p-5 rounded-xl border grid grid-cols-3 gap-4"><div className="col-span-1"><label className="text-xs font-bold uppercase">Tag No *</label><input required type="text" name="tag_no" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Package</label><input type="text" name="package" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Deck</label><input type="text" name="deck_level" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-3"><label className="text-xs font-bold uppercase">Description</label><input type="text" name="description" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" /></div></div><div className="flex justify-end gap-3 mt-4"><button type="button" onClick={()=>setShowAddModal(false)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button><button type="submit" className="px-8 py-2 font-bold text-white bg-blue-600 rounded-xl">Create</button></div></form></div></div>
+      )}
       {editingItem && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl">
-            <div className="px-6 py-4 border-b flex justify-between items-center">
-              <h3 className="font-black text-xl flex items-center gap-2"><Edit className="text-emerald-600"/> Edit</h3>
-              <button onClick={()=>setEditingItem(null)} className="p-2"><X size={20}/></button>
-            </div>
-            <form onSubmit={handleEditSubmit} className="p-6">
-              <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 grid grid-cols-3 gap-4">
-                <div className="col-span-1">
-                  <label className="text-xs font-bold uppercase">Tag No *</label>
-                  <input required type="text" value={editingItem.tag_no} onChange={(e)=>setEditingItem({...editingItem, tag_no: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs font-bold uppercase">Package</label>
-                  <input type="text" value={editingItem.package || ''} onChange={(e)=>setEditingItem({...editingItem, package: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-xs font-bold uppercase">Deck</label>
-                  <input type="text" value={editingItem.deck_level || ''} onChange={(e)=>setEditingItem({...editingItem, deck_level: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" />
-                </div>
-                <div className="col-span-3">
-                  <label className="text-xs font-bold uppercase">Description</label>
-                  <input type="text" value={editingItem.description || ''} onChange={(e)=>setEditingItem({...editingItem, description: e.target.value})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-4">
-                <button type="button" onClick={()=>setEditingItem(null)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button>
-                <button type="submit" className="px-8 py-2 font-bold text-white bg-emerald-600 rounded-xl">Update</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl"><div className="px-6 py-4 border-b flex justify-between items-center"><h3 className="font-black text-xl flex items-center gap-2"><Edit className="text-emerald-600"/> Edit</h3><button onClick={()=>setEditingItem(null)} className="p-2"><X size={20}/></button></div><form onSubmit={handleEditSubmit} className="p-6"><div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 grid grid-cols-3 gap-4"><div className="col-span-1"><label className="text-xs font-bold uppercase">Tag No *</label><input required type="text" value={editingItem.tag_no} onChange={(e)=>setEditingItem({...editingItem, tag_no: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Package</label><input type="text" value={editingItem.package || ''} onChange={(e)=>setEditingItem({...editingItem, package: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Deck</label><input type="text" value={editingItem.deck_level || ''} onChange={(e)=>setEditingItem({...editingItem, deck_level: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-3"><label className="text-xs font-bold uppercase">Description</label><input type="text" value={editingItem.description || ''} onChange={(e)=>setEditingItem({...editingItem, description: e.target.value})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" /></div></div><div className="flex justify-end gap-3 mt-4"><button type="button" onClick={()=>setEditingItem(null)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button><button type="submit" className="px-8 py-2 font-bold text-white bg-emerald-600 rounded-xl">Update</button></div></form></div></div>
       )}
 
       {/* HEADER BỘ LỌC ĐỒNG BỘ MÀU CHUẨN */}
@@ -526,16 +576,25 @@ export default function Matrix() {
          
          {/* ACTION BUTTONS */}
          <div className="flex items-center gap-2 shrink-0">
+           <button onClick={() => setShowDeleteAllModal(true)} className="px-3 h-[36px] bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold text-xs rounded-md flex items-center gap-1 transition-colors mr-2">
+             <Trash2 size={12}/> Clear Data
+           </button>
+
            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-md px-2 h-[36px]">
               <Filter size={14} className="text-slate-400 mr-2" />
-              <select value={filterDeck} onChange={(e) => setFilterDeck(e.target.value)} className="bg-transparent py-1 text-xs font-bold text-slate-600 outline-none pr-2 cursor-pointer uppercase max-w-[150px]">
+              <select value={filterPkg} onChange={(e) => setFilterPkg(e.target.value)} className="bg-transparent py-1 text-xs font-bold text-slate-600 outline-none cursor-pointer uppercase max-w-[120px] mr-1 border-r border-slate-200">
+                {uniquePkgs.map(d => <option key={d} value={d}>{d === 'All' ? 'ALL PKG' : d}</option>)}
+              </select>
+              <select value={filterDeck} onChange={(e) => setFilterDeck(e.target.value)} className="bg-transparent py-1 text-xs font-bold text-slate-600 outline-none pr-1 pl-2 cursor-pointer uppercase max-w-[120px]">
                 {uniqueDecks.map(d => <option key={d} value={d}>{d === 'All' ? 'ALL DECKS' : d}</option>)}
               </select>
            </div>
-           <div className="relative w-48">
+
+           <div className="relative w-40">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="w-full pl-8 pr-3 py-1.5 h-[36px] bg-slate-50 border border-slate-200 rounded-md text-xs font-bold focus:outline-none"/>
            </div>
+           
            <button onClick={() => importFileRef.current.click()} disabled={isImporting} className="px-3 h-[36px] border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-md flex items-center gap-1">
              {isImporting ? <Loader size={12} className="animate-spin"/> : <Upload size={12}/>} Import
            </button>
@@ -547,18 +606,43 @@ export default function Matrix() {
          </div>
       </div>
 
-      {/* LƯỚI DATA CÓ KÉO GIÃN */}
+      {/* LƯỚI DATA CÓ KÉO GIÃN VÀ CĂN GIỮA DỌC (ALIGN-MIDDLE) */}
       <div className="flex-1 p-4 overflow-hidden min-w-0">
           <div className="w-full h-full overflow-auto bg-white shadow-sm border border-slate-300 rounded-lg">
             <table className="w-full text-left border-collapse min-w-max relative table-fixed">
               <thead>
                 <tr className="bg-slate-50 text-slate-600 uppercase text-[10px] font-black border-b-2 border-slate-300">
-                  <th style={{ width: colWidths.tag }} className="p-3 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-20 text-center">Tag No <Resizer colKey="tag" /></th>
-                  <th style={{ width: colWidths.pkg }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Package <Resizer colKey="pkg" /></th>
-                  <th style={{ width: colWidths.desc }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Description <Resizer colKey="desc" /></th>
-                  <th style={{ width: colWidths.deck }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Deck <Resizer colKey="deck" /></th>
+                  <th style={{ width: colWidths.tag }} className="p-0 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-20">
+                    <div onClick={() => handleSort('tag_no')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Tag No {sortConfig.key === 'tag_no' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="tag" />
+                  </th>
+                  <th style={{ width: colWidths.pkg }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('package')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Package {sortConfig.key === 'package' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="pkg" />
+                  </th>
+                  <th style={{ width: colWidths.desc }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('description')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Description {sortConfig.key === 'description' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="desc" />
+                  </th>
+                  <th style={{ width: colWidths.deck }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('deck_level')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Deck {sortConfig.key === 'deck_level' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="deck" />
+                  </th>
                   
-                  <th style={{ width: colWidths.mrir }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">MRIR & Rec <Resizer colKey="mrir" /></th>
+                  <th style={{ width: colWidths.mrir }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('mrir_no')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      MRIR & Rec {sortConfig.key === 'mrir_no' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="mrir" />
+                  </th>
                   
                   <th style={{ width: colWidths.install }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">INSTALLATION <Resizer colKey="install" /></th>
                   
@@ -573,69 +657,70 @@ export default function Matrix() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-300">
-                {filteredList.map((item) => {
+                {sortedList.map((item) => {
                   const rowStatus = calculateRowStatus(item);
                   const isDuplicate = duplicateTags.has(item.tag_no?.trim().toUpperCase());
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 group">
-                      <td className={`p-3 border-r border-b border-slate-300 align-top sticky left-0 z-10 bg-white group-hover:bg-slate-50 overflow-hidden text-left ${isDuplicate ? 'bg-red-50 border-y border-y-red-300' : ''}`}>
-                        <div className="flex flex-col gap-1.5">
+                      
+                      {/* SỬ DỤNG ALIGN-MIDDLE (CĂN GIỮA DỌC) CHO TẤT CẢ CÁC Ô */}
+                      <td className={`p-3 border-r border-b border-slate-300 align-middle sticky left-0 z-10 bg-white group-hover:bg-slate-50 overflow-hidden text-left ${isDuplicate ? 'bg-red-50 border-y border-y-red-300' : ''}`}>
+                        <div className="flex flex-col justify-center h-full gap-1.5">
                           <span className={`font-black text-sm w-full whitespace-normal break-words ${isDuplicate ? 'text-red-600' : 'text-slate-800'}`} title={item.tag_no}>{isDuplicate && <AlertCircle size={14} className="inline mr-1 animate-pulse"/>}{item.tag_no}</span>
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 shrink-0"><button onClick={() => setEditingItem(item)} className="p-1 border bg-white text-slate-400 hover:text-blue-600 rounded"><Edit size={12} /></button><button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 border bg-white text-slate-400 hover:text-red-600 rounded"><Trash2 size={12} /></button></div>
                         </div>
                       </td>
                       
-                      <td className="p-2 border-r border-b border-slate-300 align-top text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle text-left">
                         <AutoResizeTextarea 
                           value={item.package || ''} 
                           onChange={(e) => handleLocalChange(item.id, 'package', e.target.value.toUpperCase())} 
                           onBlur={(e) => saveToDatabase(item.id, 'package', e.target.value.toUpperCase())} 
-                          className="text-left bg-transparent font-bold text-[11px] uppercase outline-none hover:bg-slate-100 focus:bg-white rounded px-1"
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-[11px] uppercase rounded px-1 outline-none resize-none" 
                         />
                       </td>
                       
-                      <td className="p-2 border-r border-b border-slate-300 align-top text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle text-left">
                         <AutoResizeTextarea 
                           value={item.description || ''} 
                           onChange={(e) => handleLocalChange(item.id, 'description', e.target.value)} 
                           onBlur={(e) => saveToDatabase(item.id, 'description', e.target.value)} 
-                          className="text-left bg-transparent font-bold text-xs outline-none hover:bg-slate-100 focus:bg-white rounded px-1" 
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-xs rounded px-1 outline-none resize-none" 
                         />
                       </td>
                       
-                      {/* DECK ĐÃ TRỞ THÀNH Ô NHẬP TEXT TỰ ĐỘNG XUỐNG DÒNG */}
-                      <td className="p-3 border-r border-b border-slate-300 align-top text-left">
+                      <td className="p-3 border-r border-b border-slate-300 align-middle text-left">
                         <AutoResizeTextarea 
                           value={item.deck_level || ''} 
                           onChange={(e) => handleLocalChange(item.id, 'deck_level', e.target.value.toUpperCase())} 
                           onBlur={(e) => saveToDatabase(item.id, 'deck_level', e.target.value.toUpperCase())} 
-                          className="text-left bg-transparent font-medium text-[11px] uppercase outline-none hover:bg-slate-100 focus:bg-white rounded px-1"
+                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-medium text-[11px] uppercase rounded px-1 outline-none resize-none" 
                         />
                       </td>
                       
-                      <td className="p-2 border-r border-b border-slate-300 align-top">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle">
                         <MrirCell item={item} handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} />
                       </td>
 
-                      <td className="p-2 border-r border-b border-slate-300 align-top">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle">
                         <MilestoneCell item={item} fieldPrefix="installation" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} />
                       </td>
                       
-                      <td className="p-2 border-r border-b border-slate-300 align-top"><MilestoneCell item={item} fieldPrefix="welding" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-top"><MilestoneCell item={item} fieldPrefix="bolting" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-top"><MilestoneCell item={item} fieldPrefix="dim" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-top"><MilestoneCell item={item} fieldPrefix="leveling" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-top"><MilestoneCell item={item} fieldPrefix="align" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="welding" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="bolting" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="dim" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="leveling" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="align" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
                       
-                      <td className="p-3 border-r border-b border-slate-300 align-top"><span className={`px-2 py-1.5 rounded text-[9px] uppercase block w-full text-center border ${rowStatus.style}`}>{rowStatus.label}</span></td>
+                      <td className="p-3 border-r border-b border-slate-300 align-middle"><span className={`px-2 py-1.5 rounded text-[9px] uppercase block w-full text-center border ${rowStatus.style}`}>{rowStatus.label}</span></td>
                       
-                      <td className="p-3 border-b border-slate-300 align-top text-left">
+                      <td className="p-3 border-b border-slate-300 align-middle text-left">
                         <AutoResizeTextarea 
                           value={item.notes || ''} 
                           placeholder="Notes..." 
                           onChange={(e) => handleLocalChange(item.id, 'notes', e.target.value)} 
                           onBlur={(e) => saveToDatabase(item.id, 'notes', e.target.value)} 
-                          className="text-left bg-transparent hover:bg-slate-100 focus:bg-white rounded text-[10px] text-slate-500 outline-none" 
+                          className="w-full px-1 py-1 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 rounded text-[10px] font-medium text-slate-500 outline-none resize-none text-left" 
                         />
                       </td>
                     </tr>
@@ -686,7 +771,7 @@ export default function Matrix() {
             </tr>
           </thead>
           <tbody>
-            {filteredList.map(item => {
+            {sortedList.map(item => {
               const instStatus = item.installation_status || 'NOT YET';
               const instDate = item.installation_date ? `\n(${formatToExcelDate(item.installation_date)})` : '';
               
@@ -707,21 +792,21 @@ export default function Matrix() {
 
               return (
                 <tr key={`print-${item.id}`}>
-                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'left' }}>{item.tag_no}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.package}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.description}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.deck_level}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', color: '#1d4ed8', fontWeight: 'bold' }}>{item.mrir_no}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center' }}>{formatToExcelDate(item.receiving_date)}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'left', verticalAlign: 'middle' }}>{item.tag_no}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.package}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.description}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.deck_level}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', color: '#1d4ed8', fontWeight: 'bold', verticalAlign: 'middle' }}>{item.mrir_no}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', verticalAlign: 'middle' }}>{formatToExcelDate(item.receiving_date)}</td>
                   
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{instStatus === 'Completed' ? 'DONE' : instStatus}{instDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{weldStatus}{weldDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{boltStatus}{boltDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{dimStatus}{dimDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{levStatus}{levDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line' }}>{alignStatus}{alignDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{instStatus === 'Completed' ? 'DONE' : instStatus}{instDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{weldStatus}{weldDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{boltStatus}{boltDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{dimStatus}{dimDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{levStatus}{levDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{alignStatus}{alignDate}</td>
                   
-                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'center' }}>{calculateRowStatus(item).label}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>{calculateRowStatus(item).label}</td>
                 </tr>
               )
             })}

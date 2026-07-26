@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Download, Filter, FileSpreadsheet, LayoutGrid, FileCheck, Database, X, Printer, RefreshCw, Paperclip, Loader, Trash2, AlertCircle } from 'lucide-react';
+import { Search, Download, Filter, FileSpreadsheet, LayoutGrid, FileCheck, Database, X, Printer, RefreshCw, Paperclip, Loader, Trash2, AlertCircle, Upload, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../supabase';
 import * as XLSX from 'xlsx';
 
@@ -82,10 +82,23 @@ const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder })
 
 export default function Preservation() {
   const [equipList, setEquipList] = useState([]);
+  
+  // States Lọc & Hiển thị
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDeck, setFilterDeck] = useState('All');
+  const [filterPkg, setFilterPkg] = useState('All'); // Mới: Lọc Package
   const [statusFilters, setStatusFilters] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // Mới: Sorting
   const [showExportModal, setShowExportModal] = useState(false);
+
+  // States Import & Delete All
+  const importFileRef = useRef(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState([]);
+  const [showImportOptionsModal, setShowImportOptionsModal] = useState(false);
+  const [importSortOption, setImportSortOption] = useState('ORIGINAL');
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // ENGINE ĐỘ RỘNG CỘT
   const [colWidths, setColWidths] = useState({
@@ -94,7 +107,8 @@ export default function Preservation() {
   });
 
   async function fetchData() {
-    const { data: listData } = await supabase.from('master_equipment').select('*').order('tag_no', { ascending: true });
+    // Sửa đổi: Mặc định tải theo id để giữ nguyên thứ tự gốc khi import
+    const { data: listData } = await supabase.from('master_equipment').select('*').order('id', { ascending: true });
     if (listData) setEquipList(listData);
   }
 
@@ -145,6 +159,7 @@ export default function Preservation() {
   };
 
   const uniqueDecks = ['All', ...new Set(equipList.map(item => item.deck_level).filter(Boolean))];
+  const uniquePkgs = ['All', ...new Set(equipList.map(item => item.package).filter(Boolean))];
 
   const duplicateTags = useMemo(() => {
     const tagCounts = equipList.reduce((acc, item) => {
@@ -155,10 +170,9 @@ export default function Preservation() {
     return new Set(Object.keys(tagCounts).filter(tag => tagCounts[tag] > 1));
   }, [equipList]);
 
-  const filteredList = equipList.filter(item => {
-    const presData = calculatePreservation(item);
+  // BỘ LỌC CẤP 1: Search, Deck, Package (Tính toán KPI động dựa trên mảng này)
+  const baseFilteredList = equipList.filter(item => {
     const searchLower = searchTerm.toLowerCase();
-    
     const matchSearch = 
       (item.tag_no?.toLowerCase().includes(searchLower)) || 
       (item.description?.toLowerCase().includes(searchLower)) ||
@@ -169,62 +183,132 @@ export default function Preservation() {
       (item.pres_notes?.toLowerCase().includes(searchLower));
 
     const matchDeck = filterDeck === 'All' || item.deck_level === filterDeck;
+    const matchPkg = filterPkg === 'All' || item.package === filterPkg;
     
-    let matchStatus = true;
-    if (statusFilters.length > 0) {
-      const isRequiring = !!item.pres_freq;
-      const sType = presData.status?.type; 
-      matchStatus = statusFilters.some(f => {
-        if (f === 'REQUIRING') return isRequiring;
-        return sType === f;
-      });
-    }
-
-    return matchSearch && matchDeck && matchStatus;
+    return matchSearch && matchDeck && matchPkg;
   });
 
+  // KPI ĐỘNG
   const stats = {
-    total: equipList.length,
-    requiring: equipList.filter(i => !!i.pres_freq).length,
-    safe: equipList.filter(i => calculatePreservation(i).status?.type === 'SAFE').length,
-    due_soon: equipList.filter(i => calculatePreservation(i).status?.type === 'DUE_SOON').length,
-    overdue: equipList.filter(i => calculatePreservation(i).status?.type === 'OVERDUE').length,
+    total: baseFilteredList.length,
+    requiring: baseFilteredList.filter(i => !!i.pres_freq).length,
+    safe: baseFilteredList.filter(i => calculatePreservation(i).status?.type === 'SAFE').length,
+    due_soon: baseFilteredList.filter(i => calculatePreservation(i).status?.type === 'DUE_SOON').length,
+    overdue: baseFilteredList.filter(i => calculatePreservation(i).status?.type === 'OVERDUE').length,
+  };
+
+  // BỘ LỌC CẤP 2: Áp dụng Status Filter cho hiển thị lưới
+  const statusFilteredList = baseFilteredList.filter(item => {
+    if (statusFilters.length === 0) return true;
+    const presData = calculatePreservation(item);
+    const isRequiring = !!item.pres_freq;
+    const sType = presData.status?.type; 
+    return statusFilters.some(f => {
+      if (f === 'REQUIRING') return isRequiring;
+      return sType === f;
+    });
+  });
+
+  // SORTING: Xếp mảng trước khi render
+  const sortedList = [...statusFilteredList].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    const aVal = String(a[sortConfig.key] || '').toLowerCase();
+    const bVal = String(b[sortConfig.key] || '').toLowerCase();
+    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    setSortConfig({ key, direction });
   };
 
   const handleToggleFilter = (filterKey) => {
     if (filterKey === 'All') setStatusFilters([]);
-    else {
-      setStatusFilters(prev => {
-        if (prev.includes(filterKey)) return prev.filter(k => k !== filterKey);
-        else return [...prev, filterKey];
-      });
-    }
+    else setStatusFilters(prev => prev.includes(filterKey) ? prev.filter(k => k !== filterKey) : [...prev, filterKey]);
   };
 
   const handleResizeStart = (e, colKey) => {
-    e.preventDefault(); const startX = e.clientX; const startWidth = colWidths[colKey];
+    e.preventDefault(); e.stopPropagation(); 
+    const startX = e.clientX; const startWidth = colWidths[colKey];
     const doDrag = (dragEvent) => { requestAnimationFrame(() => { setColWidths(prev => ({ ...prev, [colKey]: Math.max(60, startWidth + (dragEvent.clientX - startX)) })); }); };
     const stopDrag = () => { document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); };
     document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag);
   };
 
   const Resizer = ({ colKey }) => (
-    <div onMouseDown={(e) => handleResizeStart(e, colKey)} className="absolute top-0 right-0 w-[6px] h-full cursor-col-resize hover:bg-blue-400 z-30 transition-colors" style={{ transform: 'translateX(50%)' }} />
+    <div onMouseDown={(e) => handleResizeStart(e, colKey)} onClick={(e) => e.stopPropagation()} className="absolute top-0 right-0 w-[6px] h-full cursor-col-resize hover:bg-blue-400 z-30 transition-colors" style={{ transform: 'translateX(50%)' }} />
   );
 
+  // --- XỬ LÝ IMPORT CHUẨN MỚI ---
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0]; if (!file) return; 
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target.result); const workbook = XLSX.read(data, { type: 'array', cellDates: true }); const worksheet = workbook.Sheets[workbook.SheetNames[0]]; const json = XLSX.utils.sheet_to_json(worksheet);
+        if (json.length === 0) throw new Error("File rỗng!");
+        const normalizeDate = (val) => { if (!val) return null; if (val instanceof Date && !isNaN(val)) return val.toISOString().split('T')[0]; const d = new Date(val); return isNaN(d) ? null : d.toISOString().split('T')[0]; };
+        const normalizeStatusAndDate = (val) => {
+          if (!val) return { status: 'Not yet', date: null }; if (val instanceof Date && !isNaN(val)) return { status: 'Completed', date: val.toISOString().split('T')[0] };
+          const s = String(val).trim().toUpperCase(); const parsedDate = new Date(s);
+          if (!isNaN(parsedDate.getTime()) && s.length >= 6) return { status: 'Completed', date: parsedDate.toISOString().split('T')[0] };
+          if (['DONE', 'COMPLETED', 'OK', 'YES', 'Y'].includes(s)) return { status: 'Completed', date: null };
+          if (['IN PROG', 'IN PROGRESS', 'WIP'].includes(s)) return { status: 'In progress', date: null };
+          if (['N/A', 'NA', '-'].includes(s)) return { status: 'N/A', date: null }; return { status: 'Not yet', date: null };
+        };
+        const payloads = json.map(row => {
+          const instData = normalizeStatusAndDate(row['Install Date'] || row['Installation']); const weldData = normalizeStatusAndDate(row['Welding']); const boltData = normalizeStatusAndDate(row['Bolting']); const dimData = normalizeStatusAndDate(row['Dim Check']); const levData = normalizeStatusAndDate(row['Leveling']); const alignData = normalizeStatusAndDate(row['Alignment']);
+          return { tag_no: (row['Tag No'] || row['Tag_No'] || row['TAG NO'] || '').toString().toUpperCase().trim(), package: (row['Package'] || '').toString().toUpperCase().trim(), description: (row['Description'] || '').toString().trim(), deck_level: (row['Deck Level'] || row['Deck'] || '').toString().toUpperCase().trim(), mrir_no: (row['MRIR No'] || '').toString().trim(), receiving_date: normalizeDate(row['Receiving Date']), installation_status: instData.status, installation_date: instData.date, welding_status: weldData.status, welding_date: weldData.date, bolting_status: boltData.status, bolting_date: boltData.date, dim_status: dimData.status, dim_date: dimData.date, leveling_status: levData.status, leveling_date: levData.date, align_status: alignData.status, align_date: alignData.date, notes: (row['Notes'] || '').toString().trim(), pres_initial_method: (row['Initial Method'] || row['Pres Method'] || '').toString().trim(), pres_alternate_method: (row['Alternate Method'] || '').toString().trim(), pres_checksheet: (row['Pres Checksheet'] || row['Checksheet'] || '').toString().trim(), pres_freq: (row['Freq'] || row['Frequency'] || '').toString().trim(), pres_start_date: normalizeDate(row['Pres Start Date'] || row['Receiving Date']), pres_last_date: normalizeDate(row['Last Done Date'] || row['Last Done']), pres_notes: (row['Pres Notes'] || '').toString().trim(), discipline: 'Mechanical', phase: 'CC' };
+        }).filter(item => item.tag_no !== '');
+        
+        setPendingImportData(payloads);
+        setShowImportOptionsModal(true);
+      } catch (err) { alert("Lỗi: " + err.message); } finally { setIsImporting(false); e.target.value = null; }
+    }; reader.readAsArrayBuffer(file);
+  };
+
+  const handleConfirmImport = async () => {
+    setIsImporting(true);
+    let finalPayloads = [...pendingImportData];
+    if (importSortOption === 'TAG') finalPayloads.sort((a,b) => a.tag_no.localeCompare(b.tag_no));
+    else if (importSortOption === 'PKG') finalPayloads.sort((a,b) => (a.package||'').localeCompare(b.package||''));
+    else if (importSortOption === 'DECK') finalPayloads.sort((a,b) => (a.deck_level||'').localeCompare(b.deck_level||''));
+
+    try {
+      await supabase.from('master_equipment').insert(finalPayloads); 
+      alert(`Đã Import thành công ${finalPayloads.length} thiết bị!`); 
+      setShowImportOptionsModal(false);
+      setPendingImportData([]);
+      fetchData();
+    } catch (err) { alert("Lỗi khi import: " + err.message); } finally { setIsImporting(false); }
+  };
+
+  const handleDeleteAllDatabase = async () => {
+    if (deleteConfirmText !== 'DELETE') return alert("Vui lòng gõ chữ DELETE để xác nhận!");
+    setIsImporting(true);
+    try {
+      const { error } = await supabase.from('master_equipment').delete().not('id', 'is', null);
+      if (error) throw error;
+      setShowDeleteAllModal(false); setDeleteConfirmText(''); fetchData(); alert("Đã xóa sạch cơ sở dữ liệu!");
+    } catch (err) { alert("Lỗi khi xóa: " + err.message); } finally { setIsImporting(false); }
+  };
+
+  // --- XUẤT FILE ---
   const handleExportExcelSelection = (mode) => {
     let dataToExport = [];
     if (mode === 'INSTALL_ONLY') {
-      dataToExport = filteredList.map(item => ({
-        'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Install Date': formatToExcelDate(item.installation_date), 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Overall Status': item.installation_date ? 'COMPLETED' : 'IN PROGRESS', 'Notes': item.notes
-      }));
+      dataToExport = sortedList.map(item => ({ 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Install Date': formatToExcelDate(item.installation_date), 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Overall Status': item.installation_date ? 'COMPLETED' : 'IN PROGRESS', 'Notes': item.notes }));
     } else if (mode === 'PRES_ONLY') {
-      dataToExport = filteredList.map(item => {
+      dataToExport = sortedList.map(item => {
         const presData = calculatePreservation(item);
         return { 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Next Due Date': presData.nextDate, 'Countdown Status': presData.status.label, 'Pres Notes': item.pres_notes };
       });
     } else { 
-      dataToExport = filteredList.map(item => {
+      dataToExport = sortedList.map(item => {
         const presData = calculatePreservation(item);
         return { 'Tag No': item.tag_no, 'Package': item.package, 'Description': item.description, 'Deck': item.deck_level, 'MRIR No': item.mrir_no, 'Receiving Date': formatToExcelDate(item.receiving_date), 'Install Date': formatToExcelDate(item.installation_date), 'Welding': item.welding_date ? formatToExcelDate(item.welding_date) : item.welding_status, 'Bolting': item.bolting_date ? formatToExcelDate(item.bolting_date) : item.bolting_status, 'Dim Check': item.dim_date ? formatToExcelDate(item.dim_date) : item.dim_status, 'Leveling': item.leveling_date ? formatToExcelDate(item.leveling_date) : item.leveling_status, 'Alignment': item.align_date ? formatToExcelDate(item.align_date) : item.align_status, 'Initial Method': item.pres_initial_method, 'Alternate Method': item.pres_alternate_method, 'Checksheet': item.pres_checksheet, 'Freq': item.pres_freq, 'Pres Start Date': formatToExcelDate(item.pres_start_date), 'Last Done Date': formatToExcelDate(item.pres_last_date), 'Next Due Date': presData.nextDate, 'Countdown Status': presData.status.label, 'Notes': item.notes, 'Pres Notes': item.pres_notes };
       });
@@ -234,7 +318,7 @@ export default function Preservation() {
 
   const exportToWord = () => {
     const printContent = document.getElementById('printable-matrix').innerHTML;
-    const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Preservation Tracker</title><style>@page { size: landscape; margin: 1cm; } table {width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 10px;} th, td {border: 1px solid black; padding: 4px; text-align: left;} th {background-color: #f8fafc; font-weight: bold; text-align: center;}</style></head><body>`;
+    const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Preservation Tracker</title><style>@page { size: landscape; margin: 1cm; } table {width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 10px;} th, td {border: 1px solid black; padding: 4px; text-align: left; vertical-align: middle;} th {background-color: #f8fafc; font-weight: bold; text-align: center;}</style></head><body>`;
     const sourceHTML = header + printContent + `</body></html>`;
     const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
     const fileDownload = document.createElement("a"); document.body.appendChild(fileDownload); fileDownload.href = source; fileDownload.download = `Preservation_Tracker_${new Date().toISOString().split('T')[0]}.doc`; fileDownload.click(); document.body.removeChild(fileDownload);
@@ -242,7 +326,7 @@ export default function Preservation() {
 
   const exportToPDF = () => {
     const printContent = document.getElementById('printable-matrix').innerHTML; const originalContent = document.body.innerHTML;
-    document.body.innerHTML = `<div id="print-container"><style>@media print { body { background: white !important; margin: 0; padding: 0; } #print-container { width: 100%; font-family: Arial, sans-serif; padding: 8mm; } @page { size: A4 landscape; margin: 5mm; } table { width: 100%; border-collapse: collapse; font-size: 8.5px; } th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: top; } th { background-color: #f8fafc !important; font-weight: bold; text-transform: uppercase; text-align: center; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }</style>${printContent}</div>`;
+    document.body.innerHTML = `<div id="print-container"><style>@media print { body { background: white !important; margin: 0; padding: 0; } #print-container { width: 100%; font-family: Arial, sans-serif; padding: 8mm; } @page { size: A4 landscape; margin: 5mm; } table { width: 100%; border-collapse: collapse; font-size: 8.5px; } th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: middle; } th { background-color: #f8fafc !important; font-weight: bold; text-transform: uppercase; text-align: center; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }</style>${printContent}</div>`;
     window.print(); document.body.innerHTML = originalContent; window.location.reload(); 
   };
 
@@ -257,9 +341,7 @@ export default function Preservation() {
         const parsed = JSON.parse(fileField);
         if (Array.isArray(parsed)) return parsed;
       } catch (e) {
-        if (typeof fileField === 'string' && fileField.startsWith('http')) {
-          return [{ name: 'Attachment_1.pdf', url: fileField }];
-        }
+        if (typeof fileField === 'string' && fileField.startsWith('http')) return [{ name: 'Attachment_1.pdf', url: fileField }];
       }
       return [];
     };
@@ -281,12 +363,7 @@ export default function Preservation() {
             const jsonStr = JSON.stringify(newFilesList);
             handleLocalChange(item.id, 'pres_file', jsonStr);
             saveToDatabase(item.id, 'pres_file', jsonStr);
-        } catch (err) {
-            console.error("Upload failed", err);
-        } finally {
-            setIsUploading(false);
-            e.target.value = null;
-        }
+        } catch (err) { console.error("Upload failed", err); } finally { setIsUploading(false); e.target.value = null; }
     };
 
     const handleRemoveFile = (index) => {
@@ -305,20 +382,14 @@ export default function Preservation() {
                 Count: {files.length}
               </span>
             )}
-            
             <div className="flex flex-col gap-1 w-full items-center">
               {files.map((file, idx) => (
                  <div key={idx} className="flex items-center h-[20px] border border-emerald-300 rounded bg-emerald-50 text-emerald-700 text-[9px] font-bold overflow-hidden w-full max-w-[125px]">
-                    <button type="button" onClick={() => window.open(file.url, '_blank')} className="flex-1 px-1.5 text-left truncate hover:bg-emerald-100" title={file.name}>
-                       {file.name}
-                    </button>
-                    <button type="button" onClick={() => handleRemoveFile(idx)} className="px-1 bg-white text-red-500 border-l border-emerald-300 h-full flex items-center justify-center hover:bg-red-50 shrink-0">
-                       <X size={10} strokeWidth={3}/>
-                    </button>
+                    <button type="button" onClick={() => window.open(file.url, '_blank')} className="flex-1 px-1.5 text-left truncate hover:bg-emerald-100" title={file.name}>{file.name}</button>
+                    <button type="button" onClick={() => handleRemoveFile(idx)} className="px-1 bg-white text-red-500 border-l border-emerald-300 h-full flex items-center justify-center hover:bg-red-50 shrink-0"><X size={10} strokeWidth={3}/></button>
                  </div>
               ))}
             </div>
-
             {isUploading ? (
                 <div className="text-[9px] font-bold text-blue-600 flex items-center justify-center gap-1 mt-1"><Loader size={10} className="animate-spin"/> Uploading...</div>
             ) : (
@@ -333,7 +404,70 @@ export default function Preservation() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden min-w-0 relative">
+      <input type="file" accept=".xlsx, .xls, .csv" ref={importFileRef} className="hidden" onChange={handleFileSelect} />
       
+      {/* MODAL IMPORT OPTIONS */}
+      {showImportOptionsModal && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between bg-slate-50 items-center">
+              <h3 className="font-black text-xl text-slate-800 flex items-center gap-2"><Upload className="text-blue-600" size={24}/> Import Setup</h3>
+              <button onClick={() => {setShowImportOptionsModal(false); setPendingImportData([]);}} className="text-slate-400 hover:text-red-500 p-2"><X size={20} /></button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4 font-medium">Bạn chuẩn bị đưa <span className="font-black text-blue-600">{pendingImportData.length}</span> thiết bị vào Database. Bạn muốn sắp xếp chúng như thế nào?</p>
+              <div className="space-y-3">
+                <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${importSortOption === 'ORIGINAL' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="importSort" checked={importSortOption === 'ORIGINAL'} onChange={() => setImportSortOption('ORIGINAL')} className="w-4 h-4 text-blue-600"/>
+                  <span className="font-bold text-slate-700 text-sm">Giữ nguyên thứ tự file gốc Excel</span>
+                </label>
+                <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${importSortOption === 'TAG' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="importSort" checked={importSortOption === 'TAG'} onChange={() => setImportSortOption('TAG')} className="w-4 h-4 text-blue-600"/>
+                  <span className="font-bold text-slate-700 text-sm">Tự động xếp theo Tag No (A-Z)</span>
+                </label>
+                <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${importSortOption === 'PKG' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="importSort" checked={importSortOption === 'PKG'} onChange={() => setImportSortOption('PKG')} className="w-4 h-4 text-blue-600"/>
+                  <span className="font-bold text-slate-700 text-sm">Tự động xếp theo Package</span>
+                </label>
+                <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${importSortOption === 'DECK' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="importSort" checked={importSortOption === 'DECK'} onChange={() => setImportSortOption('DECK')} className="w-4 h-4 text-blue-600"/>
+                  <span className="font-bold text-slate-700 text-sm">Tự động xếp theo Deck</span>
+                </label>
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <button onClick={() => {setShowImportOptionsModal(false); setPendingImportData([]);}} className="px-5 py-2 font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200">Hủy bỏ</button>
+                <button onClick={handleConfirmImport} disabled={isImporting} className="px-5 py-2 font-bold text-white bg-blue-600 rounded-xl flex items-center gap-2 hover:bg-blue-700">
+                  {isImporting ? <Loader size={16} className="animate-spin"/> : <Save size={16}/>} Bắt đầu Import
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XÓA TẤT CẢ */}
+      {showDeleteAllModal && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-red-500">
+            <div className="bg-red-50 px-6 py-4 border-b border-red-100 flex justify-between items-center">
+              <h3 className="font-black text-xl text-red-700 flex items-center gap-2"><AlertTriangle className="text-red-600" size={24}/> NGUY HIỂM!</h3>
+              <button onClick={() => setShowDeleteAllModal(false)} className="text-red-400 hover:text-red-600 p-2"><X size={20} /></button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm font-bold text-slate-700 mb-2">Bạn đang chuẩn bị <span className="text-red-600 uppercase underline">XÓA SẠCH VĨNH VIỄN</span> toàn bộ cơ sở dữ liệu ({equipList.length} thiết bị).</p>
+              <p className="text-xs text-slate-500 mb-6 font-medium">Hành động này không thể hoàn tác. Để xác nhận, vui lòng gõ chính xác chữ <strong className="text-black">DELETE</strong> vào ô bên dưới.</p>
+              <input type="text" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} placeholder="Nhập DELETE..." className="w-full border-2 border-red-200 focus:border-red-500 rounded-lg px-4 py-2 font-black text-red-600 outline-none text-center mb-6 placeholder:font-normal placeholder:text-slate-300"/>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => {setShowDeleteAllModal(false); setDeleteConfirmText('');}} className="px-5 py-2 font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200">Hủy</button>
+                <button onClick={handleDeleteAllDatabase} disabled={isImporting || deleteConfirmText !== 'DELETE'} className={`px-5 py-2 font-black text-white rounded-xl flex items-center gap-2 ${deleteConfirmText === 'DELETE' ? 'bg-red-600 hover:bg-red-700 shadow-lg shadow-red-500/30' : 'bg-red-300 cursor-not-allowed'}`}>
+                  {isImporting ? <Loader size={16} className="animate-spin"/> : <Trash2 size={16}/>} XÓA TẤT CẢ
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- MODAL XUẤT EXCEL --- */}
       {showExportModal && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -393,26 +527,32 @@ export default function Preservation() {
          </div>
          
          <div className="flex gap-2 items-center shrink-0">
-            <div className="relative w-48">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="w-full pl-8 pr-3 py-1.5 h-[36px] bg-slate-50 border border-slate-200 rounded-md text-xs font-bold focus:outline-none"/>
-            </div>
-            
+            <button onClick={() => setShowDeleteAllModal(true)} className="px-3 h-[36px] bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold text-xs rounded-md flex items-center gap-1 transition-colors mr-2">
+              <Trash2 size={12}/> Clear Data
+            </button>
+
             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-md px-2 h-[36px]">
               <Filter size={14} className="text-slate-400 mr-2" />
-              <select value={filterDeck} onChange={(e) => setFilterDeck(e.target.value)} className="bg-transparent py-1 text-xs font-bold text-slate-600 outline-none pr-2 cursor-pointer uppercase">
+              <select value={filterPkg} onChange={(e) => setFilterPkg(e.target.value)} className="bg-transparent py-1 text-xs font-bold text-slate-600 outline-none cursor-pointer uppercase max-w-[120px] mr-1 border-r border-slate-200">
+                {uniquePkgs.map(d => <option key={d} value={d}>{d === 'All' ? 'ALL PKG' : d}</option>)}
+              </select>
+              <select value={filterDeck} onChange={(e) => setFilterDeck(e.target.value)} className="bg-transparent py-1 text-xs font-bold text-slate-600 outline-none pr-1 pl-2 cursor-pointer uppercase max-w-[120px]">
                 {uniqueDecks.map(d => <option key={d} value={d}>{d === 'All' ? 'ALL DECKS' : d}</option>)}
               </select>
             </div>
 
-            <div className="w-px h-6 bg-slate-200 mx-1"></div>
-
-            <div className="flex gap-2">
-              <button onClick={exportToPDF} className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-600 px-3 h-[36px] rounded-md border border-slate-300 transition-colors shadow-sm text-xs font-bold"><Printer size={12} /> PDF</button>
-              <button onClick={exportToWord} className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-600 px-3 h-[36px] rounded-md border border-slate-300 transition-colors shadow-sm text-xs font-bold"><Download size={12} /> Word</button>
-              <button onClick={() => setShowExportModal(true)} className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-600 px-3 h-[36px] rounded-md border border-slate-300 transition-colors shadow-sm text-xs font-bold"><Download size={12} /> Excel</button>
-              <button onClick={fetchData} className="p-2 h-[36px] border border-slate-300 rounded-md bg-white text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><RefreshCw size={14}/></button>
+            <div className="relative w-40">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search..." className="w-full pl-8 pr-3 py-1.5 h-[36px] bg-slate-50 border border-slate-200 rounded-md text-xs font-bold focus:outline-none"/>
             </div>
+
+            <button onClick={() => importFileRef.current.click()} disabled={isImporting} className="px-3 h-[36px] border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-md flex items-center gap-1 ml-1">
+              {isImporting ? <Loader size={12} className="animate-spin"/> : <Upload size={12}/>} Import
+            </button>
+            <button onClick={exportToPDF} className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-600 px-3 h-[36px] rounded-md border border-slate-300 transition-colors shadow-sm text-xs font-bold"><Printer size={12} /> PDF</button>
+            <button onClick={exportToWord} className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-600 px-3 h-[36px] rounded-md border border-slate-300 transition-colors shadow-sm text-xs font-bold"><Download size={12} /> Word</button>
+            <button onClick={() => setShowExportModal(true)} className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-600 px-3 h-[36px] rounded-md border border-slate-300 transition-colors shadow-sm text-xs font-bold"><Download size={12} /> Excel</button>
+            <button onClick={fetchData} className="p-2 h-[36px] border border-slate-300 rounded-md bg-white text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><RefreshCw size={14}/></button>
          </div>
       </div>
 
@@ -422,16 +562,66 @@ export default function Preservation() {
             <table className="w-full text-left border-collapse min-w-max relative table-fixed">
               <thead>
                 <tr className="bg-slate-50 border-b-2 border-slate-300 text-slate-600 uppercase text-[10px] font-black tracking-wider text-center">
-                  <th style={{ width: colWidths.tag }} className="p-3 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-20 text-center">Tag No <Resizer colKey="tag" /></th>
-                  <th style={{ width: colWidths.pkg }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Package <Resizer colKey="pkg" /></th>
-                  <th style={{ width: colWidths.desc }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Description <Resizer colKey="desc" /></th>
-                  <th style={{ width: colWidths.deck }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Deck <Resizer colKey="deck" /></th>
-                  <th style={{ width: colWidths.init }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Initial Method <Resizer colKey="init" /></th>
-                  <th style={{ width: colWidths.alt }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Alt Method <Resizer colKey="alt" /></th>
-                  <th style={{ width: colWidths.check }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Checksheet <Resizer colKey="check" /></th>
-                  <th style={{ width: colWidths.freq }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Freq <Resizer colKey="freq" /></th>
-                  <th style={{ width: colWidths.start }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Start Date <Resizer colKey="start" /></th>
-                  <th style={{ width: colWidths.last }} className="p-3 border-r border-slate-300 sticky top-0 z-10 text-center bg-blue-50/50">Last Done <Resizer colKey="last" /></th>
+                  <th style={{ width: colWidths.tag }} className="p-0 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-20">
+                    <div onClick={() => handleSort('tag_no')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Tag No {sortConfig.key === 'tag_no' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="tag" />
+                  </th>
+                  <th style={{ width: colWidths.pkg }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('package')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Package {sortConfig.key === 'package' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="pkg" />
+                  </th>
+                  <th style={{ width: colWidths.desc }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('description')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Description {sortConfig.key === 'description' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="desc" />
+                  </th>
+                  <th style={{ width: colWidths.deck }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('deck_level')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Deck {sortConfig.key === 'deck_level' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="deck" />
+                  </th>
+                  <th style={{ width: colWidths.init }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('pres_initial_method')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Initial Method {sortConfig.key === 'pres_initial_method' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="init" />
+                  </th>
+                  <th style={{ width: colWidths.alt }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('pres_alternate_method')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Alt Method {sortConfig.key === 'pres_alternate_method' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="alt" />
+                  </th>
+                  <th style={{ width: colWidths.check }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('pres_checksheet')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Checksheet {sortConfig.key === 'pres_checksheet' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="check" />
+                  </th>
+                  <th style={{ width: colWidths.freq }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('pres_freq')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Freq {sortConfig.key === 'pres_freq' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="freq" />
+                  </th>
+                  <th style={{ width: colWidths.start }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
+                    <div onClick={() => handleSort('pres_start_date')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
+                      Start Date {sortConfig.key === 'pres_start_date' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="start" />
+                  </th>
+                  <th style={{ width: colWidths.last }} className="p-0 border-r border-slate-300 sticky top-0 z-10 bg-blue-50/50">
+                    <div onClick={() => handleSort('pres_last_date')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-blue-100 hover:text-blue-700 transition-colors">
+                      Last Done {sortConfig.key === 'pres_last_date' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                    </div>
+                    <Resizer colKey="last" />
+                  </th>
                   <th style={{ width: colWidths.action }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Action <Resizer colKey="action" /></th>
                   <th style={{ width: colWidths.next }} className="p-3 border-r border-slate-300 sticky top-0 z-10 text-center bg-amber-50/50">Next Due <Resizer colKey="next" /></th>
                   <th style={{ width: colWidths.countdown }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Countdown <Resizer colKey="countdown" /></th>
@@ -439,21 +629,24 @@ export default function Preservation() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredList.map((item) => {
+                {sortedList.map((item) => {
                   const presData = calculatePreservation(item);
                   const isDuplicate = duplicateTags.has(item.tag_no?.trim().toUpperCase());
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
                       
-                      <td className={`p-3 pl-4 border-r border-b border-slate-300 align-top text-left sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors overflow-hidden whitespace-normal break-words ${isDuplicate ? 'bg-red-50 border-y border-y-red-300' : ''}`}>
-                         <span className={`font-black text-sm w-full whitespace-normal break-words ${isDuplicate ? 'text-red-600' : 'text-slate-800'}`} title={item.tag_no}>
-                           {isDuplicate && <AlertCircle size={14} className="inline mr-1 text-red-500 animate-pulse"/>}
-                           {item.tag_no}
-                         </span>
+                      {/* SỬ DỤNG ALIGN-MIDDLE CHO TẤT CẢ CÁC Ô TRONG DÒNG NÀY */}
+                      <td className={`p-3 pl-4 border-r border-b border-slate-300 align-middle text-left sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors overflow-hidden whitespace-normal break-words ${isDuplicate ? 'bg-red-50 border-y border-y-red-300' : ''}`}>
+                         <div className="flex flex-col justify-center h-full gap-1.5">
+                           <span className={`font-black text-sm w-full whitespace-normal break-words ${isDuplicate ? 'text-red-600' : 'text-slate-800'}`} title={item.tag_no}>
+                             {isDuplicate && <AlertCircle size={14} className="inline mr-1 text-red-500 animate-pulse"/>}
+                             {item.tag_no}
+                           </span>
+                         </div>
                       </td>
 
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-left">
                         <AutoResizeTextarea 
                           value={item.package || ''} 
                           onChange={(e) => handleLocalChange(item.id, 'package', e.target.value.toUpperCase())} 
@@ -462,7 +655,7 @@ export default function Preservation() {
                         />
                       </td>
                       
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-left">
                         <AutoResizeTextarea 
                           value={item.description || ''} 
                           onChange={(e) => handleLocalChange(item.id, 'description', e.target.value)} 
@@ -471,8 +664,7 @@ export default function Preservation() {
                         />
                       </td>
 
-                      {/* Thay đổi Deck thành Text Input co giãn */}
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-left">
                         <AutoResizeTextarea 
                           value={item.deck_level || ''} 
                           onChange={(e) => handleLocalChange(item.id, 'deck_level', e.target.value.toUpperCase())} 
@@ -481,7 +673,7 @@ export default function Preservation() {
                         />
                       </td>
 
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-left">
                         <AutoResizeTextarea 
                           value={item.pres_initial_method || ''} 
                           placeholder="Init method..." 
@@ -491,7 +683,7 @@ export default function Preservation() {
                         />
                       </td>
                       
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-left">
                         <AutoResizeTextarea 
                           value={item.pres_alternate_method || ''} 
                           placeholder="Alt method..." 
@@ -501,7 +693,7 @@ export default function Preservation() {
                         />
                       </td>
                       
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-left">
                         <AutoResizeTextarea 
                           value={item.pres_checksheet || ''} 
                           placeholder="Checksheet..." 
@@ -511,8 +703,7 @@ export default function Preservation() {
                         />
                       </td>
                       
-                      {/* Thay đổi Freq thành Text Input co giãn */}
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-left">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-left">
                         <AutoResizeTextarea 
                           value={item.pres_freq || ''} 
                           placeholder="Freq..." 
@@ -522,32 +713,32 @@ export default function Preservation() {
                         />
                       </td>
                       
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-center">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-center">
                          <div className="flex justify-center w-full">
                            <CustomDateInput value={item.pres_start_date} placeholder="Start Date" onChange={(val) => { handleLocalChange(item.id, 'pres_start_date', val); saveToDatabase(item.id, 'pres_start_date', val); }} className={`w-full px-1 py-1.5 hover:bg-white focus:bg-white rounded text-[11px] font-bold outline-none cursor-pointer text-center bg-transparent border border-transparent hover:border-slate-300 ${item.pres_start_date ? 'text-slate-800' : 'text-slate-400'}`} />
                          </div>
                       </td>
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-center">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-center">
                          <div className="flex justify-center w-full">
                            <CustomDateInput value={item.pres_last_date} placeholder="Last Done" onChange={(val) => { handleLocalChange(item.id, 'pres_last_date', val); saveToDatabase(item.id, 'pres_last_date', val); }} className={`w-full px-1 py-1.5 hover:bg-white focus:bg-white rounded text-[11px] font-bold outline-none cursor-pointer text-center bg-transparent border border-transparent hover:border-slate-300 ${item.pres_last_date ? 'text-blue-700' : 'text-slate-400'}`} />
                          </div>
                       </td>
 
-                      <td className="p-2 border-r border-b border-slate-300 align-top overflow-hidden text-center">
+                      <td className="p-2 border-r border-b border-slate-300 align-middle overflow-hidden text-center">
                         <ActionCell item={item} />
                       </td>
 
-                      <td className="p-3 border-r border-b border-slate-300 text-center font-black text-xs text-slate-700 align-top overflow-hidden">
+                      <td className="p-3 border-r border-b border-slate-300 text-center font-black text-xs text-slate-700 align-middle overflow-hidden">
                         {presData.nextDate || '-'}
                       </td>
                       
-                      <td className="p-3 border-r border-b border-slate-300 text-center align-top overflow-hidden">
+                      <td className="p-3 border-r border-b border-slate-300 text-center align-middle overflow-hidden">
                         <span className={`px-2 py-1.5 rounded text-[9px] font-black border uppercase block w-full text-center truncate ${presData.status.style}`}>
                           {presData.status.label}
                         </span>
                       </td>
 
-                      <td className="p-2 border-b border-slate-300 align-top overflow-hidden text-left">
+                      <td className="p-2 border-b border-slate-300 align-middle overflow-hidden text-left">
                          <AutoResizeTextarea 
                            value={item.pres_notes || ''} 
                            placeholder="Notes..." 
@@ -602,22 +793,22 @@ export default function Preservation() {
             </tr>
           </thead>
           <tbody>
-            {filteredList.map(item => {
+            {sortedList.map(item => {
               const presData = calculatePreservation(item);
               return (
                 <tr key={`print-${item.id}`}>
-                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'left' }}>{item.tag_no}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.package}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.description}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.deck_level}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.pres_initial_method}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.pres_alternate_method}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.pres_checksheet}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left' }}>{item.pres_freq}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center' }}>{formatToExcelDate(item.pres_start_date)}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', color: '#1d4ed8', textAlign: 'center' }}>{formatToExcelDate(item.pres_last_date)}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'center' }}>{presData.nextDate || '-'}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'center' }}>{presData.status.label}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'left', verticalAlign: 'middle' }}>{item.tag_no}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.package}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.description}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.deck_level}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.pres_initial_method}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.pres_alternate_method}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.pres_checksheet}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.pres_freq}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', verticalAlign: 'middle' }}>{formatToExcelDate(item.pres_start_date)}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', color: '#1d4ed8', textAlign: 'center', verticalAlign: 'middle' }}>{formatToExcelDate(item.pres_last_date)}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>{presData.nextDate || '-'}</td>
+                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>{presData.status.label}</td>
                 </tr>
               )
             })}
