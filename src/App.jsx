@@ -51,7 +51,9 @@ function App() {
 
   // NẾU ĐÃ ĐĂNG NHẬP (ADMIN) HOẶC LÀ KHÁCH -> VÀO APP BÌNH THƯỜNG
   return (
-    <div className="flex h-screen w-screen bg-slate-50 font-sans overflow-hidden">
+    // THAY ĐỔI QUAN TRỌNG: Đổi w-screen thành min-w-[1366px] để kích hoạt trải nghiệm "Zoom Sa bàn" trên Mobile
+    <div className="flex h-screen min-w-[1366px] bg-slate-50 font-sans overflow-hidden">
+      
       {/* Truyền thêm cờ isGuest vào Sidebar để sau này bạn có thể ẩn/hiện menu tùy quyền */}
       <Sidebar activeModule={activeModule} setActiveModule={setActiveModule} isGuest={isGuest} />
       
