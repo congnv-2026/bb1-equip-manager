@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Plus, X, Save, Paperclip, FileCheck, Download, Filter, Edit, Loader, Trash2, Upload, AlertCircle, FileSpreadsheet, LayoutGrid, Database, Printer, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Search, Plus, X, Save, Paperclip, FileCheck, Download, Filter, Edit, Loader, Trash2, Upload, AlertCircle, FileSpreadsheet, LayoutGrid, Database, Printer, RefreshCw, AlertTriangle, Palette } from 'lucide-react';
 import { supabase } from '../supabase';
 import * as XLSX from 'xlsx';
 
@@ -14,6 +14,9 @@ const formatToExcelDate = (dateString) => {
   return `${day}-${month}-${year}`; 
 };
 
+// ==========================================
+// COMPONENT: Ô NHẬP NGÀY THÁNG
+// ==========================================
 const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) => {
   const [isFocused, setIsFocused] = useState(false);
   const displayValue = value ? formatToExcelDate(value) : '';
@@ -22,7 +25,10 @@ const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) 
   );
 };
 
-const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder }) => {
+// ==========================================
+// COMPONENT: Ô TEXT TỰ ĐỘNG CO GIÃN CHIỀU CAO
+// ==========================================
+const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder, textColor = 'text-slate-600' }) => {
   const textareaRef = useRef(null);
   const resize = () => {
     if (textareaRef.current) {
@@ -47,10 +53,56 @@ const AutoResizeTextarea = ({ value, onChange, onBlur, className, placeholder })
     return () => observer.disconnect();
   }, []);
   return (
-    <textarea ref={textareaRef} value={value || ''} onChange={(e) => { onChange(e); resize(); }} onBlur={onBlur} placeholder={placeholder} rows={1} className={`${className} overflow-hidden resize-none block w-full leading-relaxed`} />
+    <textarea ref={textareaRef} value={value || ''} onChange={(e) => { onChange(e); resize(); }} onBlur={onBlur} placeholder={placeholder} rows={1} className={`${className} ${textColor} overflow-hidden resize-none block w-full leading-relaxed`} />
   );
 };
 
+// ==========================================
+// COMPONENT: Ô NOTES CÓ TÔ MÀU CHỮ
+// ==========================================
+const ColorNotesCell = ({ item, handleLocalChange, saveToDatabase }) => {
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const currentColor = item.notes_color || 'text-slate-600';
+
+  const handleColorChange = (colorClass) => {
+    handleLocalChange(item.id, 'notes_color', colorClass);
+    saveToDatabase(item.id, 'notes_color', colorClass);
+    setShowColorPicker(false);
+  };
+
+  return (
+    <div className="relative flex flex-col justify-center w-full h-full group">
+      <AutoResizeTextarea 
+        value={item.notes || ''} 
+        placeholder="Notes..." 
+        textColor={currentColor}
+        onChange={(e) => handleLocalChange(item.id, 'notes', e.target.value)} 
+        onBlur={(e) => saveToDatabase(item.id, 'notes', e.target.value)} 
+        className="w-full px-1 py-1 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 rounded text-[10px] font-medium outline-none resize-none text-left pr-6" 
+      />
+      <button 
+        onClick={() => setShowColorPicker(!showColorPicker)}
+        className="absolute right-1 top-1 p-1 rounded hover:bg-slate-200 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        title="Đổi màu chữ Notes"
+      >
+        <Palette size={12} />
+      </button>
+
+      {showColorPicker && (
+        <div className="absolute right-0 top-6 bg-white border border-slate-200 shadow-xl rounded-md p-1.5 flex gap-1 z-[100]">
+          <button onClick={() => handleColorChange('text-slate-600')} className="w-5 h-5 rounded-full bg-slate-600 hover:ring-2 ring-slate-300 transition-all" title="Mặc định"></button>
+          <button onClick={() => handleColorChange('text-red-600 font-bold')} className="w-5 h-5 rounded-full bg-red-600 hover:ring-2 ring-red-300 transition-all" title="Đỏ"></button>
+          <button onClick={() => handleColorChange('text-amber-500 font-bold')} className="w-5 h-5 rounded-full bg-amber-500 hover:ring-2 ring-amber-300 transition-all" title="Vàng"></button>
+          <button onClick={() => handleColorChange('text-emerald-600 font-bold')} className="w-5 h-5 rounded-full bg-emerald-600 hover:ring-2 ring-emerald-300 transition-all" title="Xanh lá"></button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==========================================
+// COMPONENT: MRIR CELL
+// ==========================================
 const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
   const fileInputRef = useRef(null); 
   const [isUploading, setIsUploading] = useState(false); 
@@ -58,6 +110,7 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
   const recDate = item.receiving_date || ''; 
   const fileUrl = item.mrir_file; 
   const hasFile = !!fileUrl && fileUrl.startsWith('http');
+  
   const handleFileUpload = async (e) => { 
       const file = e.target.files[0]; 
       if (!file) return; 
@@ -107,6 +160,9 @@ const MrirCell = ({ item, handleLocalChange, saveToDatabase }) => {
   );
 };
 
+// ==========================================
+// COMPONENT: MILESTONE CELL
+// ==========================================
 const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase }) => {
   const fileInputRef = useRef(null); 
   const [isUploading, setIsUploading] = useState(false); 
@@ -144,14 +200,23 @@ const MilestoneCell = ({ item, fieldPrefix, handleLocalChange, saveToDatabase })
   );
 };
 
+// ==========================================
+// MAIN COMPONENT: MATRIX
+// ==========================================
 export default function Matrix() {
   const [equipList, setEquipList] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDeck, setFilterDeck] = useState('All');
   const [filterPkg, setFilterPkg] = useState('All');
   const [statusFilters, setStatusFilters] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-  const [colWidths, setColWidths] = useState({ tag: 160, pkg: 105, desc: 220, deck: 130, mrir: 140, install: 125, welding: 125, bolting: 125, dim: 125, leveling: 125, align: 125, overall: 110, notes: 180 });
+  const [sortConfig, setSortConfig] = useState([]); 
+  
+  const defaultColWidths = { tag: 160, pkg: 105, desc: 220, deck: 130, mrir: 140, install: 125, welding: 125, bolting: 125, dim: 125, leveling: 125, align: 125, overall: 110, notes: 180 };
+  const [colWidths, setColWidths] = useState(() => {
+    const saved = localStorage.getItem('matrix_colWidths');
+    return saved ? JSON.parse(saved) : defaultColWidths;
+  });
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -167,11 +232,14 @@ export default function Matrix() {
   const [formData, setFormData] = useState({ tag_no: '', description: '', package: '', deck_level: '', mrir_no: '', receiving_date: '', installation_date: '', notes: '' });
 
   async function fetchData() {
-    // SỬA LỖI: Dùng created_at thay vì id để giữ nguyên chính xác thứ tự file gốc
     const { data: listData } = await supabase.from('master_equipment').select('*').order('created_at', { ascending: true });
     if (listData) setEquipList(listData);
   }
   useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => {
+    localStorage.setItem('matrix_colWidths', JSON.stringify(colWidths));
+  }, [colWidths]);
 
   const isReceived = (item) => !!item.receiving_date || !!item.mrir_no;
   const isInstalled = (item) => item.installation_status === 'Completed' || item.installation_status === 'N/A' || !!item.installation_date;
@@ -227,21 +295,52 @@ export default function Matrix() {
     });
   });
 
-  // TỐI ƯU SORTING: Có numeric:true để TAG-2 đứng trước TAG-10
-  let sortedList = statusFilteredList;
-  if (sortConfig.key) {
-    sortedList = [...statusFilteredList].sort((a, b) => {
-      const aVal = String(a[sortConfig.key] || '');
-      const bVal = String(b[sortConfig.key] || '');
-      const compareResult = aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' });
-      return sortConfig.direction === 'asc' ? compareResult : -compareResult;
+  let sortedList = [...statusFilteredList];
+  if (sortConfig.length > 0) {
+    sortedList.sort((a, b) => {
+      for (let sortItem of sortConfig) {
+        const aVal = String(a[sortItem.key] || '');
+        const bVal = String(b[sortItem.key] || '');
+        const cmp = aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' });
+        if (cmp !== 0) {
+          return sortItem.direction === 'asc' ? cmp : -cmp;
+        }
+      }
+      return 0; 
     });
   }
 
-  const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
-    setSortConfig({ key, direction });
+  const handleSort = (key, e) => {
+    e.preventDefault();
+    setSortConfig(prev => {
+      const isShift = e.shiftKey;
+      const existingIndex = prev.findIndex(s => s.key === key);
+      if (!isShift) {
+        if (prev.length === 1 && existingIndex === 0) {
+          if (prev[0].direction === 'asc') return [{ key, direction: 'desc' }];
+          return []; 
+        }
+        return [{ key, direction: 'asc' }];
+      } else {
+        const newSort = [...prev];
+        if (existingIndex >= 0) {
+          if (newSort[existingIndex].direction === 'asc') newSort[existingIndex].direction = 'desc';
+          else newSort.splice(existingIndex, 1); 
+        } else {
+          newSort.push({ key, direction: 'asc' });
+        }
+        return newSort;
+      }
+    });
+  };
+
+  const getSortIndicator = (key) => {
+    const index = sortConfig.findIndex(s => s.key === key);
+    if (index === -1) return '';
+    const sort = sortConfig[index];
+    const arrow = sort.direction === 'asc' ? '↑' : '↓';
+    const num = sortConfig.length > 1 ? index + 1 : '';
+    return <span className="text-blue-600 font-black ml-1">{arrow}{num}</span>;
   };
 
   const handleToggleFilter = (filterKey) => {
@@ -256,7 +355,7 @@ export default function Matrix() {
     const stopDrag = () => { document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); };
     document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag);
   };
-  const Resizer = ({ colKey }) => <div onMouseDown={(e) => handleResizeStart(e, colKey)} onClick={(e) => e.stopPropagation()} className="absolute top-0 right-0 w-[6px] h-full cursor-col-resize hover:bg-blue-400 z-30 transition-colors" style={{ transform: 'translateX(50%)' }} />;
+  const Resizer = ({ colKey }) => <div onMouseDown={(e) => handleResizeStart(e, colKey)} onClick={(e) => e.stopPropagation()} className="absolute top-0 right-[-3px] w-[6px] h-full cursor-col-resize hover:bg-blue-400 z-50 transition-colors" />;
 
   const handleModalInputChange = (e) => { const val = ['tag_no', 'package', 'deck_level'].includes(e.target.name) ? e.target.value.toUpperCase() : e.target.value; setFormData({ ...formData, [e.target.name]: val }); };
 
@@ -320,8 +419,6 @@ export default function Matrix() {
   const handleConfirmImport = async () => {
     setIsImporting(true);
     let finalPayloads = [...pendingImportData];
-    
-    // TỐI ƯU SORTING IMPORT: Có numeric:true để TAG-2 đúng chuẩn
     if (importSortOption === 'TAG') finalPayloads.sort((a,b) => String(a.tag_no).localeCompare(String(b.tag_no), undefined, { numeric: true }));
     else if (importSortOption === 'PKG') finalPayloads.sort((a,b) => String(a.package||'').localeCompare(String(b.package||''), undefined, { numeric: true }));
     else if (importSortOption === 'DECK') finalPayloads.sort((a,b) => String(a.deck_level||'').localeCompare(String(b.deck_level||''), undefined, { numeric: true }));
@@ -341,13 +438,25 @@ export default function Matrix() {
     const ws = XLSX.utils.json_to_sheet(dataToExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Export"); XLSX.writeFile(wb, `${mode}_Matrix.xlsx`); setShowExportModal(false); 
   };
 
-  const exportToWord = () => { const printContent = document.getElementById('printable-matrix').innerHTML; const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Installation Matrix</title><style>@page { size: landscape; margin: 1cm; } table {width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 10px;} th, td {border: 1px solid black; padding: 4px; text-align: left; vertical-align: middle;} th {background-color: #f8fafc; font-weight: bold; text-align: center;}</style></head><body>`; const sourceHTML = header + printContent + `</body></html>`; const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML); const fileDownload = document.createElement("a"); document.body.appendChild(fileDownload); fileDownload.href = source; fileDownload.download = `Installation_Matrix_${new Date().toISOString().split('T')[0]}.doc`; fileDownload.click(); document.body.removeChild(fileDownload); };
-  const exportToPDF = () => { const printContent = document.getElementById('printable-matrix').innerHTML; const originalContent = document.body.innerHTML; document.body.innerHTML = `<div id="print-container"><style>@media print { body { background: white !important; margin: 0; padding: 0; } #print-container { width: 100%; font-family: Arial, sans-serif; padding: 8mm; } @page { size: A4 landscape; margin: 5mm; } table { width: 100%; border-collapse: collapse; font-size: 8.5px; } th, td { border: 1px solid #000; padding: 5px; text-align: left; vertical-align: middle; } th { background-color: #f8fafc !important; font-weight: bold; text-transform: uppercase; text-align: center; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }</style>${printContent}</div>`; window.print(); document.body.innerHTML = originalContent; window.location.reload(); };
+  const exportToWord = () => { const printContent = document.getElementById('printable-matrix').innerHTML; const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Installation Matrix</title><style>@page { size: A3 landscape; margin: 15mm; } table {width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 10px;} th, td {border: 1px solid black; padding: 4px; text-align: left; vertical-align: middle;} th {background-color: #f8fafc; font-weight: bold; text-align: center;}</style></head><body>`; const sourceHTML = header + printContent + `</body></html>`; const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML); const fileDownload = document.createElement("a"); document.body.appendChild(fileDownload); fileDownload.href = source; fileDownload.download = `Installation_Matrix_${new Date().toISOString().split('T')[0]}.doc`; fileDownload.click(); document.body.removeChild(fileDownload); };
+  
+  const exportToPDF = () => {
+    const printContent = document.getElementById('printable-matrix').innerHTML;
+    const originalContent = document.body.innerHTML;
+    document.body.innerHTML = `
+      <div id="print-container">
+        ${printContent}
+      </div>`;
+    window.print();
+    document.body.innerHTML = originalContent;
+    window.location.reload(); 
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden relative">
       <input type="file" accept=".xlsx, .xls, .csv" ref={importFileRef} className="hidden" onChange={handleFileSelect} />
 
+      {/* MODAL IMPORT OPTIONS */}
       {showImportOptionsModal && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -386,25 +495,36 @@ export default function Matrix() {
         </div>
       )}
 
+      {/* MODAL EXPORT EXCEL */}
       {showExportModal && (
-        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between bg-slate-50 items-center">
-              <h3 className="font-black text-xl text-slate-800 flex items-center gap-2"><FileSpreadsheet className="text-emerald-600" size={24}/> Export</h3>
-              <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-red-500 p-2"><X size={20} /></button>
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-black text-xl text-slate-800 flex items-center gap-2"><FileSpreadsheet className="text-emerald-600" size={24}/> Export Data to Excel</h3>
+              <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-red-500 bg-white hover:bg-red-50 p-2 rounded-full border border-slate-200"><X size={20} /></button>
             </div>
             <div className="p-6 flex flex-col gap-4">
-              <button onClick={() => handleExportExcelSelection('INSTALL_ONLY')} className="flex items-start gap-4 p-4 rounded-xl border-2 border-slate-100 hover:border-blue-400 hover:bg-blue-50 text-left group">
-                <div className="bg-blue-100 text-blue-600 p-3 rounded-lg group-hover:bg-blue-600 group-hover:text-white"><LayoutGrid size={24} /></div>
-                <div><h4 className="font-black text-sm">Installation Matrix Only</h4><p className="text-xs text-slate-500">Only construction columns.</p></div>
+              <button onClick={() => handleExportExcelSelection('INSTALL_ONLY')} className="flex items-start gap-4 p-4 rounded-xl border-2 border-slate-100 hover:border-blue-400 hover:bg-blue-50 transition-all text-left group">
+                <div className="bg-blue-100 text-blue-600 p-3 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors"><LayoutGrid size={24} /></div>
+                <div>
+                  <h4 className="font-black text-slate-800 text-sm">Installation Matrix Only</h4>
+                  <p className="text-xs font-medium text-slate-500 mt-1">Export only construction-related columns (MRIR, Install Date, Welding, Bolting, etc.)</p>
+                </div>
               </button>
-              <button onClick={() => handleExportExcelSelection('PRES_ONLY')} className="flex items-start gap-4 p-4 rounded-xl border-2 border-slate-100 hover:border-amber-400 hover:bg-amber-50 text-left group">
-                <div className="bg-amber-100 text-amber-600 p-3 rounded-lg group-hover:bg-amber-600 group-hover:text-white"><FileCheck size={24} /></div>
-                <div><h4 className="font-black text-sm">Preservation Tracker Only</h4><p className="text-xs text-slate-500">Only preservation columns.</p></div>
+              <button onClick={() => handleExportExcelSelection('PRES_ONLY')} className="flex items-start gap-4 p-4 rounded-xl border-2 border-slate-100 hover:border-amber-400 hover:bg-amber-50 transition-all text-left group">
+                <div className="bg-amber-100 text-amber-600 p-3 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition-colors"><FileCheck size={24} /></div>
+                <div>
+                  <h4 className="font-black text-slate-800 text-sm">Preservation Tracker Only</h4>
+                  <p className="text-xs font-medium text-slate-500 mt-1">Export only preservation-related columns (Method, Frequency, Last Done, Next Due, etc.)</p>
+                </div>
               </button>
-              <button onClick={() => handleExportExcelSelection('MASTER_FULL')} className="flex items-start gap-4 p-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:border-purple-500 hover:bg-purple-100 text-left group">
-                <div className="bg-purple-200 text-purple-700 p-3 rounded-lg group-hover:bg-purple-600 group-hover:text-white"><Database size={24} /></div>
-                <div><h4 className="font-black text-purple-900 text-sm">Master Full Database</h4><p className="text-xs text-purple-700/80">Export all columns.</p></div>
+              <div className="border-t border-slate-200 my-2"></div>
+              <button onClick={() => handleExportExcelSelection('MASTER_FULL')} className="flex items-start gap-4 p-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:border-purple-500 hover:bg-purple-100 transition-all text-left group shadow-sm">
+                <div className="bg-purple-200 text-purple-700 p-3 rounded-lg group-hover:bg-purple-600 group-hover:text-white transition-colors"><Database size={24} /></div>
+                <div>
+                  <h4 className="font-black text-purple-900 text-sm">Master Full Database</h4>
+                  <p className="text-xs font-medium text-purple-700/80 mt-1">Export all columns across both Installation and Preservation modules into one master sheet.</p>
+                </div>
               </button>
             </div>
           </div>
@@ -433,15 +553,8 @@ export default function Matrix() {
         </div>
       )}
 
-      {showAddModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl"><div className="px-6 py-4 border-b flex justify-between items-center"><h3 className="font-black text-xl flex items-center gap-2"><Plus className="text-blue-600"/> Add New</h3><button onClick={()=>setShowAddModal(false)} className="p-2"><X size={20}/></button></div><form onSubmit={handleAddSubmit} className="p-6"><div className="bg-slate-50 p-5 rounded-xl border grid grid-cols-3 gap-4"><div className="col-span-1"><label className="text-xs font-bold uppercase">Tag No *</label><input required type="text" name="tag_no" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Package</label><input type="text" name="package" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Deck</label><input type="text" name="deck_level" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-3"><label className="text-xs font-bold uppercase">Description</label><input type="text" name="description" onChange={handleModalInputChange} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" /></div></div><div className="flex justify-end gap-3 mt-4"><button type="button" onClick={()=>setShowAddModal(false)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button><button type="submit" className="px-8 py-2 font-bold text-white bg-blue-600 rounded-xl">Create</button></div></form></div></div>
-      )}
-      {editingItem && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl"><div className="px-6 py-4 border-b flex justify-between items-center"><h3 className="font-black text-xl flex items-center gap-2"><Edit className="text-emerald-600"/> Edit</h3><button onClick={()=>setEditingItem(null)} className="p-2"><X size={20}/></button></div><form onSubmit={handleEditSubmit} className="p-6"><div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 grid grid-cols-3 gap-4"><div className="col-span-1"><label className="text-xs font-bold uppercase">Tag No *</label><input required type="text" value={editingItem.tag_no} onChange={(e)=>setEditingItem({...editingItem, tag_no: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-bold uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Package</label><input type="text" value={editingItem.package || ''} onChange={(e)=>setEditingItem({...editingItem, package: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-1"><label className="text-xs font-bold uppercase">Deck</label><input type="text" value={editingItem.deck_level || ''} onChange={(e)=>setEditingItem({...editingItem, deck_level: e.target.value.toUpperCase()})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm uppercase outline-none" /></div><div className="col-span-3"><label className="text-xs font-bold uppercase">Description</label><input type="text" value={editingItem.description || ''} onChange={(e)=>setEditingItem({...editingItem, description: e.target.value})} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm outline-none" /></div></div><div className="flex justify-end gap-3 mt-4"><button type="button" onClick={()=>setEditingItem(null)} className="px-6 py-2 font-bold bg-slate-100 rounded-xl">Cancel</button><button type="submit" className="px-8 py-2 font-bold text-white bg-emerald-600 rounded-xl">Update</button></div></form></div></div>
-      )}
-
-      {/* HEADER BỘ LỌC */}
-      <div className="flex-none border-b border-slate-200 p-3 px-6 flex justify-between items-center bg-white z-20 min-h-[70px]">
+      {/* HEADER BỘ LỌC ĐỒNG BỘ MÀU CHUẨN */}
+      <div className="flex-none border-b border-slate-200 p-3 px-6 flex justify-between items-center bg-white z-20 overflow-x-auto gap-4 min-h-[70px]">
          <div className="flex gap-2 shrink-0">
            <button onClick={() => handleToggleFilter('All')} className={`flex flex-col items-center justify-center min-w-[75px] px-3 py-1.5 rounded-xl border transition-all ${statusFilters.length === 0 ? 'bg-purple-50 border-purple-300 shadow-inner' : 'bg-white border-slate-200 opacity-60 hover:opacity-100 hover:shadow-sm'}`}>
              <span className={`text-[10px] font-bold uppercase mb-0.5 ${statusFilters.length === 0 ? 'text-purple-600' : 'text-slate-500'}`}>Total</span>
@@ -456,7 +569,7 @@ export default function Matrix() {
              <span className={`text-2xl font-black leading-none ${statusFilters.includes('INSTALLED') ? 'text-blue-700' : 'text-blue-600'}`}>{stats.installed}</span>
            </button>
            <button onClick={() => handleToggleFilter('NOT DELIVERED')} className={`flex flex-col items-center justify-center min-w-[85px] px-3 py-1.5 rounded-xl border transition-all ${statusFilters.includes('NOT DELIVERED') ? 'bg-slate-100 border-slate-300 shadow-inner' : 'bg-white border-slate-200 opacity-50 hover:opacity-100 hover:shadow-sm'}`}>
-             <span className={`text-[10px] font-bold uppercase mb-0.5 ${statusFilters.includes('NOT DELIVERED') ? 'text-slate-600' : 'text-slate-500'}`}>Not Delivered</span>
+             <span className={`text-[10px] font-bold uppercase mb-0.5 ${statusFilters.includes('NOT DELIVERED') ? 'text-slate-600' : 'text-slate-500'}`}>Not Deliv</span>
              <span className={`text-2xl font-black leading-none ${statusFilters.includes('NOT DELIVERED') ? 'text-slate-700' : 'text-slate-400'}`}>{stats.notDelivered}</span>
            </button>
            <button onClick={() => handleToggleFilter('COMPLETED')} className={`flex flex-col items-center justify-center min-w-[75px] px-3 py-1.5 rounded-xl border transition-all ${statusFilters.includes('COMPLETED') ? 'bg-emerald-50 border-emerald-300 shadow-inner' : 'bg-white border-slate-200 opacity-50 hover:opacity-100 hover:shadow-sm'}`}>
@@ -496,85 +609,85 @@ export default function Matrix() {
          </div>
       </div>
 
-      {/* LƯỚI DATA */}
+      {/* LƯỚI DATA UI - ĐƯỜNG KẺ CHẮC CHẮN KHÔNG MẤT */}
       <div className="flex-1 p-4 overflow-hidden min-w-0">
-          <div className="w-full h-full overflow-auto bg-white shadow-sm border border-slate-300 rounded-lg">
-            <table className="w-full text-left border-collapse min-w-max relative table-fixed">
+          <div className="w-full h-full overflow-auto bg-slate-200 shadow-inner rounded-lg border border-slate-300">
+            <table className="w-full text-left border-separate border-spacing-[1px] min-w-max relative table-fixed bg-slate-300">
               <thead>
-                <tr className="bg-slate-50 text-slate-600 uppercase text-[10px] font-black border-b-2 border-slate-300">
-                  <th style={{ width: colWidths.tag }} className="p-0 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-20">
-                    <div onClick={() => handleSort('tag_no')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                      Tag No {sortConfig.key === 'tag_no' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                <tr className="uppercase text-[10px] font-black h-[40px]">
+                  <th style={{ width: colWidths.tag }} className="p-0 sticky left-0 top-0 bg-slate-100 shadow-[inset_0_-2px_0_0_#cbd5e1,3px_0_5px_-2px_rgba(0,0,0,0.15)] z-[40]">
+                    <div onClick={(e) => handleSort('tag_no', e)} className="w-full h-full p-2 flex items-center justify-center cursor-pointer hover:bg-slate-200 hover:text-blue-600 transition-colors text-slate-700">
+                      Tag No {getSortIndicator('tag_no')}
                     </div>
                     <Resizer colKey="tag" />
                   </th>
-                  <th style={{ width: colWidths.pkg }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
-                    <div onClick={() => handleSort('package')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                      Package {sortConfig.key === 'package' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  <th style={{ width: colWidths.pkg }} className="p-0 sticky top-0 bg-slate-100 shadow-[inset_0_-2px_0_0_#cbd5e1] z-20">
+                    <div onClick={(e) => handleSort('package', e)} className="w-full h-full p-2 flex items-center justify-center cursor-pointer hover:bg-slate-200 hover:text-blue-600 transition-colors text-slate-700">
+                      Package {getSortIndicator('package')}
                     </div>
                     <Resizer colKey="pkg" />
                   </th>
-                  <th style={{ width: colWidths.desc }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
-                    <div onClick={() => handleSort('description')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                      Description {sortConfig.key === 'description' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  <th style={{ width: colWidths.desc }} className="p-0 sticky top-0 bg-slate-100 shadow-[inset_0_-2px_0_0_#cbd5e1] z-20">
+                    <div onClick={(e) => handleSort('description', e)} className="w-full h-full p-2 flex items-center justify-center cursor-pointer hover:bg-slate-200 hover:text-blue-600 transition-colors text-slate-700">
+                      Description {getSortIndicator('description')}
                     </div>
                     <Resizer colKey="desc" />
                   </th>
-                  <th style={{ width: colWidths.deck }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
-                    <div onClick={() => handleSort('deck_level')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                      Deck {sortConfig.key === 'deck_level' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  <th style={{ width: colWidths.deck }} className="p-0 sticky top-0 bg-slate-100 shadow-[inset_0_-2px_0_0_#cbd5e1] z-20">
+                    <div onClick={(e) => handleSort('deck_level', e)} className="w-full h-full p-2 flex items-center justify-center cursor-pointer hover:bg-slate-200 hover:text-blue-600 transition-colors text-slate-700">
+                      Deck {getSortIndicator('deck_level')}
                     </div>
                     <Resizer colKey="deck" />
                   </th>
-                  <th style={{ width: colWidths.mrir }} className="p-0 border-r border-slate-300 sticky top-0 bg-slate-50 z-10">
-                    <div onClick={() => handleSort('mrir_no')} className="w-full h-full p-3 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 hover:text-blue-600 transition-colors">
-                      MRIR & Rec {sortConfig.key === 'mrir_no' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  <th style={{ width: colWidths.mrir }} className="p-0 sticky top-0 bg-slate-100 shadow-[inset_0_-2px_0_0_#cbd5e1] z-20">
+                    <div onClick={(e) => handleSort('mrir_no', e)} className="w-full h-full p-2 flex items-center justify-center cursor-pointer hover:bg-slate-200 hover:text-blue-600 transition-colors text-slate-700">
+                      MRIR & Rec {getSortIndicator('mrir_no')}
                     </div>
                     <Resizer colKey="mrir" />
                   </th>
-                  <th style={{ width: colWidths.install }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">INSTALLATION <Resizer colKey="install" /></th>
-                  <th style={{ width: colWidths.welding }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Welding <Resizer colKey="welding" /></th>
-                  <th style={{ width: colWidths.bolting }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Bolting <Resizer colKey="bolting" /></th>
-                  <th style={{ width: colWidths.dim }} className="p-3 border-r border-slate-300 sticky top-0 bg-amber-50/50 z-10 text-center text-slate-600">Dim Check <Resizer colKey="dim" /></th>
-                  <th style={{ width: colWidths.leveling }} className="p-3 border-r border-slate-300 sticky top-0 bg-sky-50/50 z-10 text-center text-slate-600">Leveling <Resizer colKey="leveling" /></th>
-                  <th style={{ width: colWidths.align }} className="p-3 border-r border-slate-300 sticky top-0 bg-sky-50/50 z-10 text-center text-slate-600">Alignment <Resizer colKey="align" /></th>
-                  <th style={{ width: colWidths.overall }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-10 text-center">Overall <Resizer colKey="overall" /></th>
-                  <th style={{ width: colWidths.notes }} className="p-3 sticky top-0 bg-slate-50 z-10 text-center">Notes</th>
+                  <th style={{ width: colWidths.install }} className="p-2 sticky top-0 bg-[#fffbeb] shadow-[inset_0_-2px_0_0_#fde68a] z-20 text-center text-slate-700">INSTALLATION <Resizer colKey="install" /></th>
+                  <th style={{ width: colWidths.welding }} className="p-2 sticky top-0 bg-[#fffbeb] shadow-[inset_0_-2px_0_0_#fde68a] z-20 text-center text-slate-700">Welding <Resizer colKey="welding" /></th>
+                  <th style={{ width: colWidths.bolting }} className="p-2 sticky top-0 bg-[#fffbeb] shadow-[inset_0_-2px_0_0_#fde68a] z-20 text-center text-slate-700">Bolting <Resizer colKey="bolting" /></th>
+                  <th style={{ width: colWidths.dim }} className="p-2 sticky top-0 bg-[#fffbeb] shadow-[inset_0_-2px_0_0_#fde68a] z-20 text-center text-slate-700">Dim Check <Resizer colKey="dim" /></th>
+                  <th style={{ width: colWidths.leveling }} className="p-2 sticky top-0 bg-[#eff6ff] shadow-[inset_0_-2px_0_0_#bfdbfe] z-20 text-center text-slate-700">Leveling <Resizer colKey="leveling" /></th>
+                  <th style={{ width: colWidths.align }} className="p-2 sticky top-0 bg-[#eff6ff] shadow-[inset_0_-2px_0_0_#bfdbfe] z-20 text-center text-slate-700">Alignment <Resizer colKey="align" /></th>
+                  <th style={{ width: colWidths.overall }} className="p-2 sticky top-0 bg-slate-100 shadow-[inset_0_-2px_0_0_#cbd5e1] z-20 text-center text-slate-700">Overall <Resizer colKey="overall" /></th>
+                  <th style={{ width: colWidths.notes }} className="p-2 sticky top-0 bg-slate-100 shadow-[inset_0_-2px_0_0_#cbd5e1] z-20 text-center text-slate-700">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-300">
+              <tbody>
                 {sortedList.map((item) => {
                   const rowStatus = calculateRowStatus(item);
                   const isDuplicate = duplicateTags.has(item.tag_no?.trim().toUpperCase());
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50 group">
-                      <td className={`p-3 border-r border-b border-slate-300 align-middle sticky left-0 z-10 bg-white group-hover:bg-slate-50 overflow-hidden text-left ${isDuplicate ? 'bg-red-50 border-y border-y-red-300' : ''}`}>
-                        <div className="flex flex-col justify-center h-full gap-1.5">
+                    <tr key={item.id} className="group">
+                      <td className={`p-3 align-middle sticky left-0 z-[15] overflow-hidden text-left shadow-[3px_0_5px_-2px_rgba(0,0,0,0.15)] transition-colors ${isDuplicate ? 'bg-red-50' : 'bg-white group-hover:bg-slate-50'}`}>
+                        <div className="inline-flex flex-col items-start justify-center h-full gap-1.5 w-full">
                           <span className={`font-black text-sm w-full whitespace-normal break-words ${isDuplicate ? 'text-red-600' : 'text-slate-800'}`} title={item.tag_no}>{isDuplicate && <AlertCircle size={14} className="inline mr-1 animate-pulse"/>}{item.tag_no}</span>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 shrink-0"><button onClick={() => setEditingItem(item)} className="p-1 border bg-white text-slate-400 hover:text-blue-600 rounded"><Edit size={12} /></button><button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 border bg-white text-slate-400 hover:text-red-600 rounded"><Trash2 size={12} /></button></div>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 shrink-0"><button onClick={() => setEditingItem(item)} className="p-1 border bg-white text-slate-400 hover:text-blue-600 rounded shadow-sm"><Edit size={12} /></button><button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 border bg-white text-slate-400 hover:text-red-600 rounded shadow-sm"><Trash2 size={12} /></button></div>
                         </div>
                       </td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle text-left">
+                      <td className="p-2 align-middle text-left bg-white group-hover:bg-slate-50 transition-colors">
                         <AutoResizeTextarea value={item.package || ''} onChange={(e) => handleLocalChange(item.id, 'package', e.target.value.toUpperCase())} onBlur={(e) => saveToDatabase(item.id, 'package', e.target.value.toUpperCase())} className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-[11px] uppercase rounded px-1 outline-none resize-none" />
                       </td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle text-left">
+                      <td className="p-2 align-middle text-left bg-white group-hover:bg-slate-50 transition-colors">
                         <AutoResizeTextarea value={item.description || ''} onChange={(e) => handleLocalChange(item.id, 'description', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'description', e.target.value)} className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-bold text-xs rounded px-1 outline-none resize-none" />
                       </td>
-                      <td className="p-3 border-r border-b border-slate-300 align-middle text-left">
+                      <td className="p-3 align-middle text-left bg-white group-hover:bg-slate-50 transition-colors">
                         <AutoResizeTextarea value={item.deck_level || ''} onChange={(e) => handleLocalChange(item.id, 'deck_level', e.target.value.toUpperCase())} onBlur={(e) => saveToDatabase(item.id, 'deck_level', e.target.value.toUpperCase())} className="text-left bg-transparent hover:bg-slate-100 focus:bg-white border-transparent hover:border-slate-300 text-slate-700 font-medium text-[11px] uppercase rounded px-1 outline-none resize-none" />
                       </td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle">
+                      <td className="p-2 align-middle bg-white group-hover:bg-slate-50 transition-colors">
                         <MrirCell item={item} handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} />
                       </td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="installation" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="welding" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="bolting" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="dim" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="leveling" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-2 border-r border-b border-slate-300 align-middle"><MilestoneCell item={item} fieldPrefix="align" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
-                      <td className="p-3 border-r border-b border-slate-300 align-middle"><span className={`px-2 py-1.5 rounded text-[9px] uppercase block w-full text-center border ${rowStatus.style}`}>{rowStatus.label}</span></td>
-                      <td className="p-3 border-b border-slate-300 align-middle text-left">
-                        <AutoResizeTextarea value={item.notes || ''} placeholder="Notes..." onChange={(e) => handleLocalChange(item.id, 'notes', e.target.value)} onBlur={(e) => saveToDatabase(item.id, 'notes', e.target.value)} className="w-full px-1 py-1 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 rounded text-[10px] font-medium text-slate-500 outline-none resize-none text-left" />
+                      <td className="p-2 align-middle bg-white group-hover:bg-slate-50 transition-colors"><MilestoneCell item={item} fieldPrefix="installation" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 align-middle bg-white group-hover:bg-slate-50 transition-colors"><MilestoneCell item={item} fieldPrefix="welding" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 align-middle bg-white group-hover:bg-slate-50 transition-colors"><MilestoneCell item={item} fieldPrefix="bolting" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 align-middle bg-white group-hover:bg-slate-50 transition-colors"><MilestoneCell item={item} fieldPrefix="dim" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 align-middle bg-white group-hover:bg-slate-50 transition-colors"><MilestoneCell item={item} fieldPrefix="leveling" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-2 align-middle bg-white group-hover:bg-slate-50 transition-colors"><MilestoneCell item={item} fieldPrefix="align" handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} /></td>
+                      <td className="p-3 align-middle bg-white group-hover:bg-slate-50 transition-colors"><span className={`px-2 py-1.5 rounded text-[9px] uppercase block w-full text-center border ${rowStatus.style}`}>{rowStatus.label}</span></td>
+                      <td className="p-1 align-middle bg-white group-hover:bg-slate-50 transition-colors">
+                        <ColorNotesCell item={item} handleLocalChange={handleLocalChange} saveToDatabase={saveToDatabase} />
                       </td>
                     </tr>
                   );
@@ -584,57 +697,143 @@ export default function Matrix() {
           </div>
       </div>
 
-      {/* BẢNG IN CHUẨN */}
+      {/* ========================================================= */}
+      {/* BẢNG IN CHUẨN A3 LANDSCAPE - ĐƯỢC FIX COLGROUP & SỐ TRANG  */}
+      {/* ========================================================= */}
       <div id="printable-matrix" className="hidden">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid black', paddingBottom: '10px', marginBottom: '15px' }}>
-          <div style={{ fontWeight: 'bold', fontSize: '12px' }}>MCDERMOTT<br/>PTSC</div>
-          <div style={{ textAlign: 'center', fontWeight: '900', fontSize: '18px', textTransform: 'uppercase' }}>VIETNAM BLOCK B GAS PROJECT<br/>INSTALLATION PROGRESS MATRIX</div>
-          <div style={{ fontWeight: 'bold', fontSize: '12px', textAlign: 'right' }}>PETROVIETNAM<br/>PQPOC<div style={{ fontWeight: 'normal', fontSize: '10px', marginTop: '4px' }}>Printed: {formatToExcelDate(new Date().toISOString())}</div></div>
-        </div>
-        <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', fontWeight: 'bold', fontSize: '12px', backgroundColor: '#f1f5f9', padding: '10px', border: '1px solid black' }}>
-          <span style={{ color: '#7e22ce' }}>TOTAL: {stats.total}</span><span style={{ color: '#0284c7' }}>RECEIVED: {stats.received}</span><span style={{ color: '#2563eb' }}>INSTALLED: {stats.installed}</span><span style={{ color: '#64748b' }}>NOT DELIVERED: {stats.notDelivered}</span><span style={{ color: '#059669' }}>COMPLETED: {stats.completed}</span>
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+        <style>{`
+          @media print {
+            @page { 
+              size: A3 landscape; 
+              margin: 15mm; 
+              @bottom-right {
+                content: "Page " counter(page);
+                font-family: sans-serif;
+                font-size: 10pt;
+                font-weight: bold;
+                color: #1e293b;
+              }
+            }
+            body { 
+              padding: 0 !important; 
+              margin: 0 !important; 
+              -webkit-print-color-adjust: exact !important; 
+              print-color-adjust: exact !important; 
+              background: white; 
+            }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tr { page-break-inside: avoid; }
+          }
+        `}</style>
+        
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt', tableLayout: 'fixed' }}>
+          {/* COLGROUP KHÓA ĐỘ RỘNG CỘT CHO MỌI TRANG IN */}
+          <colgroup>
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '18%' }} />
+          </colgroup>
+          
           <thead>
             <tr>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Tag No</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Package</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Description</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Deck</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>MRIR</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Rec Date</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>INSTALLATION</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Welding</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Bolting</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Dim Check</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Leveling</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Alignment</th>
-              <th style={{ border: '1px solid black', padding: '5px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Status</th>
+              <th colSpan="14" style={{ border: 'none', padding: 0, backgroundColor: 'white' }}>
+                <table style={{ width: '100%', borderBottom: '2px solid black', marginBottom: '12px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ width: '20%', fontWeight: 'bold', fontSize: '12pt', textAlign: 'left', border: 'none', padding: '0 0 8px 0' }}>
+                        MCDERMOTT<br/>PTSC
+                      </td>
+                      <td style={{ width: '60%', textAlign: 'center', fontWeight: '900', fontSize: '18pt', textTransform: 'uppercase', border: 'none', padding: '0 0 8px 0' }}>
+                        VIETNAM BLOCK B GAS PROJECT<br/>INSTALLATION PROGRESS MATRIX
+                      </td>
+                      <td style={{ width: '20%', fontWeight: 'bold', fontSize: '12pt', textAlign: 'right', border: 'none', padding: '0 0 8px 0' }}>
+                        PETROVIETNAM<br/>PQPOC
+                        <div style={{ fontWeight: 'normal', fontSize: '9pt', marginTop: '4px' }}>
+                          Printed: {formatToExcelDate(new Date().toISOString())}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <table style={{ width: '100%', backgroundColor: '#f1f5f9', border: '1px solid black', marginBottom: '12px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '8px 12px', fontWeight: 'bold', fontSize: '10pt', border: 'none', textAlign: 'left' }}>
+                        <span style={{ color: '#7e22ce', marginRight: '20px' }}>TOTAL: {stats.total}</span>
+                        <span style={{ color: '#0284c7', marginRight: '20px' }}>RECEIVED: {stats.received}</span>
+                        <span style={{ color: '#2563eb', marginRight: '20px' }}>INSTALLED: {stats.installed}</span>
+                        <span style={{ color: '#64748b', marginRight: '20px' }}>NOT DELIVERED: {stats.notDelivered}</span>
+                        <span style={{ color: '#059669' }}>COMPLETED: {stats.completed}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </th>
+            </tr>
+            
+            <tr>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Tag No</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Package</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Description</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Deck</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>MRIR No</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Rec Date</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#fef3c7', textAlign: 'center' }}>INSTALLATION</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#fef3c7', textAlign: 'center' }}>Welding</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#fef3c7', textAlign: 'center' }}>Bolting</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#fef3c7', textAlign: 'center' }}>Dim Check</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#e0f2fe', textAlign: 'center' }}>Leveling</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#e0f2fe', textAlign: 'center' }}>Alignment</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Overall Status</th>
+              <th style={{ border: '1px solid black', padding: '6px 4px', backgroundColor: '#f1f5f9', textAlign: 'center' }}>Notes</th>
             </tr>
           </thead>
           <tbody>
             {sortedList.map(item => {
+              const rowStatus = calculateRowStatus(item);
               const instStatus = item.installation_status || 'NOT YET'; const instDate = item.installation_date ? `\n(${formatToExcelDate(item.installation_date)})` : '';
               const weldStatus = item.welding_status === 'Completed' ? 'DONE' : (item.welding_status || 'NOT YET'); const weldDate = item.welding_date ? `\n(${formatToExcelDate(item.welding_date)})` : '';
               const boltStatus = item.bolting_status === 'Completed' ? 'DONE' : (item.bolting_status || 'NOT YET'); const boltDate = item.bolting_date ? `\n(${formatToExcelDate(item.bolting_date)})` : '';
               const dimStatus = item.dim_status === 'Completed' ? 'DONE' : (item.dim_status || 'NOT YET'); const dimDate = item.dim_date ? `\n(${formatToExcelDate(item.dim_date)})` : '';
               const levStatus = item.leveling_status === 'Completed' ? 'DONE' : (item.leveling_status || 'NOT YET'); const levDate = item.leveling_date ? `\n(${formatToExcelDate(item.leveling_date)})` : '';
               const alignStatus = item.align_status === 'Completed' ? 'DONE' : (item.align_status || 'NOT YET'); const alignDate = item.align_date ? `\n(${formatToExcelDate(item.align_date)})` : '';
+
+              let statusBg = '#f1f5f9'; let statusColor = '#334155';
+              if (rowStatus.label === 'COMPLETED') { statusBg = '#d1fae5'; statusColor = '#047857'; }
+              else if (rowStatus.label === 'INSTALLED') { statusBg = '#dbeafe'; statusColor = '#1d4ed8'; }
+              else if (rowStatus.label === 'RECEIVED') { statusBg = '#e0f2fe'; statusColor = '#0369a1'; }
+
               return (
                 <tr key={`print-${item.id}`}>
-                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'left', verticalAlign: 'middle' }}>{item.tag_no}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.package}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.description}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', verticalAlign: 'middle' }}>{item.deck_level}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'left', color: '#1d4ed8', fontWeight: 'bold', verticalAlign: 'middle' }}>{item.mrir_no}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', verticalAlign: 'middle' }}>{formatToExcelDate(item.receiving_date)}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{instStatus === 'Completed' ? 'DONE' : instStatus}{instDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{weldStatus}{weldDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{boltStatus}{boltDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{dimStatus}{dimDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{levStatus}{levDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{alignStatus}{alignDate}</td>
-                  <td style={{ border: '1px solid black', padding: '5px', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>{calculateRowStatus(item).label}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 4px', fontWeight: 'bold', textAlign: 'left', verticalAlign: 'middle', wordBreak: 'break-word' }}>{item.tag_no}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 4px', textAlign: 'left', verticalAlign: 'middle', wordBreak: 'break-word' }}>{item.package}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 4px', textAlign: 'left', verticalAlign: 'middle', wordBreak: 'break-word' }}>{item.description}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 4px', textAlign: 'left', verticalAlign: 'middle', wordBreak: 'break-word' }}>{item.deck_level}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 4px', textAlign: 'left', fontWeight: 'bold', verticalAlign: 'middle', wordBreak: 'break-word' }}>{item.mrir_no || '-'}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 4px', textAlign: 'center', verticalAlign: 'middle' }}>{formatToExcelDate(item.receiving_date)}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 2px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{instStatus === 'Completed' ? 'DONE' : instStatus}{instDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 2px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{weldStatus}{weldDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 2px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{boltStatus}{boltDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 2px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{dimStatus}{dimDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 2px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{levStatus}{levDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 2px', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle' }}>{alignStatus}{alignDate}</td>
+                  <td style={{ border: '1px solid black', padding: '5px 4px', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle', backgroundColor: statusBg, color: statusColor }}>
+                    {rowStatus.label}
+                  </td>
+                  <td style={{ border: '1px solid black', padding: '5px 4px', textAlign: 'left', verticalAlign: 'middle', fontSize: '8pt', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{item.notes || ''}</td>
                 </tr>
               )
             })}
