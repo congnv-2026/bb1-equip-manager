@@ -9,6 +9,9 @@ import Punchlist from './pages/Punchlist';
 import CompletionsDashboard from './pages/CompletionsDashboard';
 import Login from './pages/Login';
 
+// ---> 1. IMPORT THÊM MODULE PUNCHLIST AUDIT VÀO ĐÂY
+import PunchlistAudit from './pages/PunchlistAudit'; 
+
 function App() {
   const [session, setSession] = useState(null);
   // Khởi tạo trạng thái Khách ngay từ lúc mở web bằng cách đọc localStorage
@@ -65,6 +68,9 @@ function App() {
         {activeModule === 'itrMatrix' && <ItrMatrix isGuest={isGuest} />}
         {activeModule === 'punchlist' && <Punchlist isGuest={isGuest} />}
         {activeModule === 'completionsDashboard' && <CompletionsDashboard isGuest={isGuest} />}
+        
+        {/* ---> 2. KHAI BÁO MODULE MỚI VÀO PHẦN HIỂN THỊ */}
+        {activeModule === 'punchlistAudit' && <PunchlistAudit isGuest={isGuest} />}
       </main>
     </div>
   );

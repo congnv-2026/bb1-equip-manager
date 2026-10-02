@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Database, BarChart2, ShieldAlert, FileSignature, AlertOctagon, PieChart, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+  Database, BarChart2, ShieldAlert, FileSignature, 
+  AlertOctagon, PieChart, LogOut, ChevronLeft, ChevronRight, ScanSearch 
+} from 'lucide-react';
 import { supabase } from '../supabase';
 
 export default function Sidebar({ activeModule, setActiveModule }) {
@@ -141,6 +144,23 @@ export default function Sidebar({ activeModule, setActiveModule }) {
                </div>
              )}
            </button>
+
+           {/* ---> NÚT PUNCHLIST AUDIT MỚI THÊM VÀO <--- */}
+           <button 
+             onClick={() => setActiveModule('punchlistAudit')} 
+             title={isCollapsed ? "Punchlist Audit AI" : ""}
+             className={`w-full flex items-center gap-4 mt-2 py-3 rounded-xl font-bold transition-all ${
+               isCollapsed ? 'justify-center px-0' : 'px-4'
+             } ${activeModule === 'punchlistAudit' ? 'bg-[#0ea5e9] text-white shadow-lg shadow-sky-900/50' : 'hover:bg-slate-800 hover:text-white'}`}
+           >
+             <ScanSearch size={24} className="shrink-0" /> 
+             {!isCollapsed && (
+               <div className="flex flex-col text-left leading-tight text-base whitespace-nowrap overflow-hidden">
+                 <span>Punchlist Audit</span><span className="text-xs font-normal opacity-70">AI Verification</span>
+               </div>
+             )}
+           </button>
+           
         </div>
       </nav>
 
