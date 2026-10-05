@@ -55,23 +55,46 @@ const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) 
   );
 };
 
+// ================= GIAO DIỆN FILTER CỘT CHUẨN EXCEL =================
 const ColumnFilter = ({ filterKey, options, activeFilters, setColumnFilters }) => {
   const [isOpen, setIsOpen] = useState(false);
-
-  const toggleFilter = (val) => {
-    setColumnFilters(prev => {
-      const current = prev[filterKey] || [];
-      const isSelected = current.includes(val);
-      const next = isSelected ? current.filter(item => item !== val) : [...current, val];
-      return { ...prev, [filterKey]: next };
-    });
-  };
-
-  const selectAll = () => setColumnFilters(prev => ({ ...prev, [filterKey]: options }));
-  const clearAll = () => setColumnFilters(prev => ({ ...prev, [filterKey]: [] }));
+  const [searchTxt, setSearchTxt] = useState('');
+  const [tempFilters, setTempFilters] = useState([]);
 
   const currentFilters = activeFilters[filterKey] || [];
   const isActive = currentFilters.length > 0;
+
+  // Khi mở Pop-up, nạp lại trạng thái filter hiện tại vào bộ nhớ tạm
+  useEffect(() => {
+    if (isOpen) {
+      setTempFilters(currentFilters);
+      setSearchTxt('');
+    }
+  }, [isOpen]);
+
+  const visibleOptions = options.filter(opt => String(opt).toLowerCase().includes(searchTxt.toLowerCase()));
+  const isAllVisibleSelected = visibleOptions.length > 0 && visibleOptions.every(opt => tempFilters.includes(opt));
+
+  const toggleFilter = (val) => {
+    setTempFilters(prev => prev.includes(val) ? prev.filter(item => item !== val) : [...prev, val]);
+  };
+
+  // Tính năng Add Current Selection To Filter
+  const toggleAllVisible = () => {
+    if (isAllVisibleSelected) {
+      setTempFilters(prev => prev.filter(f => !visibleOptions.includes(f)));
+    } else {
+      const merged = Array.from(new Set([...tempFilters, ...visibleOptions]));
+      setTempFilters(merged);
+    }
+  };
+
+  const clearAll = () => setTempFilters([]);
+
+  const applyFilters = () => {
+    setColumnFilters(prev => ({ ...prev, [filterKey]: tempFilters }));
+    setIsOpen(false);
+  };
 
   return (
     <div className="relative inline-block ml-1">
@@ -82,19 +105,40 @@ const ColumnFilter = ({ filterKey, options, activeFilters, setColumnFilters }) =
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-300 shadow-xl rounded-md w-60 z-50 flex flex-col max-h-64 text-slate-700 font-medium normal-case">
-            <div className="p-2 border-b border-slate-100 flex justify-between gap-2 bg-slate-50 rounded-t-md">
-              <button onClick={selectAll} className="text-[10px] font-bold text-blue-600 hover:underline">Select All</button>
-              <button onClick={clearAll} className="text-[10px] font-bold text-red-600 hover:underline">Clear</button>
+          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-300 shadow-xl rounded-md w-60 z-50 flex flex-col font-medium normal-case">
+            <div className="p-2 border-b border-slate-200 flex flex-col gap-2 bg-slate-50 rounded-t-md">
+              <div className="relative">
+                 <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                 <input 
+                    type="text" 
+                    placeholder="Search filter..." 
+                    value={searchTxt} 
+                    onChange={e => setSearchTxt(e.target.value)}
+                    className="w-full pl-6 pr-2 py-1 text-[11px] border border-slate-300 rounded outline-none focus:border-blue-500 shadow-inner bg-white"
+                 />
+              </div>
+              <div className="flex justify-between items-center px-1">
+                <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 cursor-pointer hover:text-blue-600 transition-colors">
+                   <input type="checkbox" checked={isAllVisibleSelected} onChange={toggleAllVisible} className="rounded border-slate-300 w-3 h-3 text-blue-600 focus:ring-blue-500" />
+                   (Select All Search Results)
+                </label>
+                <button onClick={clearAll} className="text-[10px] font-bold text-red-600 hover:underline">Clear</button>
+              </div>
             </div>
-            <div className="overflow-y-auto p-1.5 flex flex-col gap-0.5">
-              {options.length === 0 && <span className="text-[10px] text-slate-400 italic p-1">No data</span>}
-              {options.map(opt => (
+            
+            <div className="overflow-y-auto p-1.5 flex flex-col gap-0.5 max-h-48">
+              {visibleOptions.length === 0 && <span className="text-[10px] text-slate-400 italic p-2 text-center">No matches found</span>}
+              {visibleOptions.map(opt => (
                 <label key={opt} className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-slate-100 p-1.5 rounded transition-colors">
-                  <input type="checkbox" checked={currentFilters.includes(opt)} onChange={() => toggleFilter(opt)} className="rounded border-slate-300 w-3 h-3 text-blue-600 focus:ring-blue-500 shrink-0" />
+                  <input type="checkbox" checked={tempFilters.includes(opt)} onChange={() => toggleFilter(opt)} className="rounded border-slate-300 w-3 h-3 text-blue-600 focus:ring-blue-500 shrink-0" />
                   <span className="truncate flex-1" title={opt === '' ? '(Blanks)' : opt}>{opt === '' ? '(Blanks)' : opt}</span>
                 </label>
               ))}
+            </div>
+
+            <div className="p-2 border-t border-slate-200 flex justify-end gap-2 bg-slate-50 rounded-b-md">
+               <button onClick={() => setIsOpen(false)} className="px-3 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-200 rounded transition-colors">Cancel</button>
+               <button onClick={applyFilters} className="px-4 py-1 text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm transition-colors">OK</button>
             </div>
           </div>
         </>
@@ -195,11 +239,36 @@ export default function ItrMatrix() {
     status: [...new Set(phaseList.map(i => String(i.itr_status || 'Not Started')))].sort(),
   };
 
-  // LOGIC TÍNH TOÁN KPI MỚI (Attached / Not Attached CHỈ ĐẾM TRONG SỐ DONE)
+  // ================= BƯỚC 1: TẠO BỘ LỌC CƠ SỞ (SEARCH + COLUMN + DATE) =================
+  const baseFilteredList = phaseList.filter(item => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchSearch = (String(item.tag_no || '').toLowerCase().includes(searchLower)) || 
+                        (String(item.description || '').toLowerCase().includes(searchLower)) || 
+                        (String(item.sub_system_no || '').toLowerCase().includes(searchLower)) || 
+                        (String(item.checksheet_type || '').toLowerCase().includes(searchLower));
+    
+    const matchPlanMonth = filterPlanMonth === '' || getMonthYear(item.plan_finish) === filterPlanMonth;
+    const matchCompMonth = filterCompMonth === '' || getMonthYear(item.complete_date) === filterCompMonth;
+
+    const matchColTag = columnFilters.tagNo?.length ? columnFilters.tagNo.includes(String(item.tag_no || '')) : true;
+    const matchColDesc = columnFilters.desc?.length ? columnFilters.desc.includes(String(item.description || '')) : true;
+    const matchColSubSys = columnFilters.subSystem?.length ? columnFilters.subSystem.includes(String(item.sub_system_no || '')) : true;
+    const matchColSubSysDesc = columnFilters.subSystemDesc?.length ? columnFilters.subSystemDesc.includes(String(item.sub_system_description || '')) : true;
+    const matchColType = columnFilters.type?.length ? columnFilters.type.includes(String(item.checksheet_type || '')) : true;
+    const matchColLoc = columnFilters.location?.length ? columnFilters.location.includes(String(item.location || '')) : true;
+    const matchColSubCon = columnFilters.subContractor?.length ? columnFilters.subContractor.includes(String(item.subcontractor || '')) : true;
+    const matchColPlanFin = columnFilters.planFinish?.length ? columnFilters.planFinish.includes(item.plan_finish ? formatToExcelDate(item.plan_finish) : '') : true;
+    const matchColCompDate = columnFilters.compDate?.length ? columnFilters.compDate.includes(item.complete_date ? formatToExcelDate(item.complete_date) : '') : true;
+    const matchColStatus = columnFilters.status?.length ? columnFilters.status.includes(String(item.itr_status || 'Not Started')) : true;
+
+    return matchSearch && matchPlanMonth && matchCompMonth && matchColTag && matchColDesc && matchColSubSys && matchColSubSysDesc && matchColType && matchColLoc && matchColSubCon && matchColPlanFin && matchColCompDate && matchColStatus;
+  });
+
+  // ================= BƯỚC 2: TÍNH KPI DỰA TRÊN BỘ LỌC CƠ SỞ (TẠO TÍNH NĂNG KPI ĐỘNG) =================
   let overdueCount = 0; let upcomingCount = 0; let unverifiedCount = 0; let duplicateCount = 0; 
   let attachedCount = 0; let notAttachedCount = 0; let completedCount = 0;
 
-  phaseList.forEach(item => {
+  baseFilteredList.forEach(item => {
       if (item.checksheet_type === 'UNVERIFIED') unverifiedCount++;
       if (isDuplicate(item)) duplicateCount++; 
       
@@ -220,8 +289,8 @@ export default function ItrMatrix() {
   });
 
   const stats = {
-    total: phaseList.length,
-    notStarted: phaseList.filter(i => !i.itr_status || i.itr_status === 'Not Started').length,
+    total: baseFilteredList.length,
+    notStarted: baseFilteredList.filter(i => !i.itr_status || i.itr_status === 'Not Started').length,
     completed: completedCount,
     attached: attachedCount, 
     notAttached: notAttachedCount, 
@@ -233,43 +302,24 @@ export default function ItrMatrix() {
     else setStatusFilters(prev => prev.includes(filterKey) ? prev.filter(k => k !== filterKey) : [...prev, filterKey]);
   };
 
-  const filteredList = phaseList.filter(item => {
-    const searchLower = searchTerm.toLowerCase();
-    const matchSearch = (String(item.tag_no || '').toLowerCase().includes(searchLower)) || (String(item.description || '').toLowerCase().includes(searchLower)) || (String(item.sub_system_no || '').toLowerCase().includes(searchLower)) || (String(item.checksheet_type || '').toLowerCase().includes(searchLower));
+  // ================= BƯỚC 3: TẠO BỘ LỌC CUỐI CÙNG (CỘNG THÊM KPI BUTTONS ĐỂ HIỂN THỊ LÊN BẢNG) =================
+  const finalFilteredList = baseFilteredList.filter(item => {
+    if (statusFilters.length === 0) return true;
     
-    let matchStatus = true;
-    if (statusFilters.length > 0) {
-        matchStatus = false;
-        if (statusFilters.includes('UNVERIFIED') && item.checksheet_type === 'UNVERIFIED') matchStatus = true;
-        if (statusFilters.includes('DUPLICATES') && isDuplicate(item)) matchStatus = true;
+    let matchStatus = false;
+    if (statusFilters.includes('UNVERIFIED') && item.checksheet_type === 'UNVERIFIED') matchStatus = true;
+    if (statusFilters.includes('DUPLICATES') && isDuplicate(item)) matchStatus = true;
+    
+    statusFilters.forEach(filter => {
+        if (filter === 'Attached' && item.itr_status === 'Completed' && item.itr_records && item.itr_records.scanned_pdf) matchStatus = true;
+        if (filter === 'Not Attached' && item.itr_status === 'Completed' && (!item.itr_records || !item.itr_records.scanned_pdf)) matchStatus = true;
+        if (filter === 'Completed' && item.itr_status === 'Completed') matchStatus = true;
         
-        statusFilters.forEach(filter => {
-            // LỌC THEO LOGIC MỚI: Chỉ tìm trong các ITR đã Completed
-            if (filter === 'Attached' && item.itr_status === 'Completed' && item.itr_records && item.itr_records.scanned_pdf) matchStatus = true;
-            if (filter === 'Not Attached' && item.itr_status === 'Completed' && (!item.itr_records || !item.itr_records.scanned_pdf)) matchStatus = true;
-            if (filter === 'Completed' && item.itr_status === 'Completed') matchStatus = true;
-            
-            if (filter === 'Not Started' && (!item.itr_status || item.itr_status === 'Not Started')) matchStatus = true;
-            if (filter === 'Overdue') { const pDate = item.plan_finish ? new Date(item.plan_finish) : null; if(pDate) pDate.setHours(0,0,0,0); if (item.itr_status !== 'Completed' && pDate && pDate < today) matchStatus = true; }
-            if (filter === 'Upcoming') { const pDate = item.plan_finish ? new Date(item.plan_finish) : null; if(pDate) pDate.setHours(0,0,0,0); if (item.itr_status !== 'Completed' && pDate && pDate >= today && pDate <= next7Days) matchStatus = true; }
-        });
-    }
-
-    const matchPlanMonth = filterPlanMonth === '' || getMonthYear(item.plan_finish) === filterPlanMonth;
-    const matchCompMonth = filterCompMonth === '' || getMonthYear(item.complete_date) === filterCompMonth;
-
-    const matchColTag = columnFilters.tagNo?.length ? columnFilters.tagNo.includes(String(item.tag_no || '')) : true;
-    const matchColDesc = columnFilters.desc?.length ? columnFilters.desc.includes(String(item.description || '')) : true;
-    const matchColSubSys = columnFilters.subSystem?.length ? columnFilters.subSystem.includes(String(item.sub_system_no || '')) : true;
-    const matchColSubSysDesc = columnFilters.subSystemDesc?.length ? columnFilters.subSystemDesc.includes(String(item.sub_system_description || '')) : true;
-    const matchColType = columnFilters.type?.length ? columnFilters.type.includes(String(item.checksheet_type || '')) : true;
-    const matchColLoc = columnFilters.location?.length ? columnFilters.location.includes(String(item.location || '')) : true;
-    const matchColSubCon = columnFilters.subContractor?.length ? columnFilters.subContractor.includes(String(item.subcontractor || '')) : true;
-    const matchColPlanFin = columnFilters.planFinish?.length ? columnFilters.planFinish.includes(item.plan_finish ? formatToExcelDate(item.plan_finish) : '') : true;
-    const matchColCompDate = columnFilters.compDate?.length ? columnFilters.compDate.includes(item.complete_date ? formatToExcelDate(item.complete_date) : '') : true;
-    const matchColStatus = columnFilters.status?.length ? columnFilters.status.includes(String(item.itr_status || 'Not Started')) : true;
-
-    return matchSearch && matchStatus && matchPlanMonth && matchCompMonth && matchColTag && matchColDesc && matchColSubSys && matchColSubSysDesc && matchColType && matchColLoc && matchColSubCon && matchColPlanFin && matchColCompDate && matchColStatus;
+        if (filter === 'Not Started' && (!item.itr_status || item.itr_status === 'Not Started')) matchStatus = true;
+        if (filter === 'Overdue') { const pDate = item.plan_finish ? new Date(item.plan_finish) : null; if(pDate) pDate.setHours(0,0,0,0); if (item.itr_status !== 'Completed' && pDate && pDate < today) matchStatus = true; }
+        if (filter === 'Upcoming') { const pDate = item.plan_finish ? new Date(item.plan_finish) : null; if(pDate) pDate.setHours(0,0,0,0); if (item.itr_status !== 'Completed' && pDate && pDate >= today && pDate <= next7Days) matchStatus = true; }
+    });
+    return matchStatus;
   });
 
   const handleResizeStart = (e, colKey) => {
@@ -633,7 +683,7 @@ export default function ItrMatrix() {
             </tr>
           </thead>
           <tbody>
-            {filteredList.map(item => (
+            {finalFilteredList.map(item => (
               <tr key={`print-list-${item.id}`}>
                 <td style={{ border: '1px solid #cbd5e1', padding: '6px', fontWeight: 'bold', textAlign: 'left' }}>{item.tag_no}</td>
                 <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'left' }}>{item.description || '-'}</td>
@@ -689,7 +739,6 @@ export default function ItrMatrix() {
             </div>
           </div>
 
-          {/* DẢI Ô KPI ĐẶT NGAY PHÍA DƯỚI TAB */}
           <div className="p-3 px-6 bg-slate-50 border-t border-slate-200 flex justify-between items-center min-h-[85px] overflow-x-auto">
             <div className="flex items-center gap-2 shrink-0">
                <button onClick={() => handleToggleFilter('All')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all bg-purple-50 border-purple-200 hover:bg-purple-100 ${statusFilters.length === 0 ? 'ring-2 ring-offset-1 ring-purple-400 shadow-sm' : 'opacity-70 hover:opacity-100'}`}>
@@ -704,7 +753,6 @@ export default function ItrMatrix() {
 
                <div className="w-px bg-slate-300 mx-1 border-r border-dashed border-slate-300 h-8"></div>
 
-               {/* CỤM NÚT DONE VÀ ATTACHED (ĐƯỢC GOM GẦN NHAU) */}
                <button onClick={() => handleToggleFilter('Completed')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Completed') ? 'bg-emerald-100 border-emerald-300 ring-2 ring-emerald-400 shadow-sm' : 'bg-white border-emerald-200 hover:bg-emerald-50 opacity-90 hover:opacity-100'}`} title="Tất cả các ITR đã làm xong">
                   <span className="text-[11px] font-black uppercase mb-0.5 text-emerald-600">Done</span>
                   <span className="text-2xl font-black leading-none text-emerald-700">{stats.completed}</span>
@@ -783,7 +831,7 @@ export default function ItrMatrix() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredList.map((item) => {
+                {finalFilteredList.map((item) => {
                   const isUnverified = item.checksheet_type === 'UNVERIFIED';
                   const isDup = isDuplicate(item);
                   let rowBg = "hover:bg-slate-50";
@@ -813,7 +861,6 @@ export default function ItrMatrix() {
                       <td className="p-3 border-r border-slate-300 text-[10px] font-bold text-slate-600 text-center align-top">{formatToExcelDate(item.plan_finish)}</td>
                       <td className="p-3 border-r border-slate-300 text-[10px] font-black text-emerald-600 text-center align-top bg-emerald-50/30">{formatToExcelDate(item.complete_date)}</td>
                       
-                      {/* CỘT STATUS: CHỨA BADGE VÀ NÚT ATTACH/VIEW FILE */}
                       <td className="p-3 border-r border-slate-300 align-top text-center">
                         <div className="flex items-center justify-center gap-2 w-full">
                           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1 border ${style}`}>
@@ -849,7 +896,7 @@ export default function ItrMatrix() {
                     </tr>
                   )
                 })}
-                {filteredList.length === 0 && (<tr><td colSpan="11" className="p-16 text-center text-slate-400 font-bold text-[11px]">No Equipment found.</td></tr>)}
+                {finalFilteredList.length === 0 && (<tr><td colSpan="11" className="p-16 text-center text-slate-400 font-bold text-[11px]">No Equipment found.</td></tr>)}
               </tbody>
             </table>
           </div>

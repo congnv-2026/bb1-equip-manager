@@ -23,39 +23,109 @@ const getCompareKey = (str) => {
   return String(str).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 };
 
+const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) => {
+  const [isFocused, setIsFocused] = useState(false);
+  let displayValue = '';
+  if (value) {
+    if (typeof value === 'string' && value.includes('-') && value.length === 10) displayValue = formatToExcelDate(value);
+    else displayValue = String(value); 
+  }
+  return (
+    <input 
+      type={isFocused && !disabled ? "date" : "text"} 
+      value={isFocused ? (value || '') : displayValue} 
+      disabled={disabled} 
+      placeholder={placeholder || "dd-mmm-yy"} 
+      onFocus={() => setIsFocused(true)} 
+      onBlur={() => setIsFocused(false)} 
+      onChange={(e) => onChange(e.target.value)} 
+      className={className} 
+    />
+  );
+};
+
+// ================= GIAO DIỆN FILTER CỘT CHUẨN EXCEL =================
 const ColumnFilter = ({ filterKey, options, activeFilters, setColumnFilters }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const toggleFilter = (val) => {
-    setColumnFilters(prev => {
-      const current = prev[filterKey] || [];
-      const isSelected = current.includes(val);
-      return { ...prev, [filterKey]: isSelected ? current.filter(item => item !== val) : [...current, val] };
-    });
-  };
-  const selectAll = () => setColumnFilters(prev => ({ ...prev, [filterKey]: options }));
-  const clearAll = () => setColumnFilters(prev => ({ ...prev, [filterKey]: [] }));
+  const [searchTxt, setSearchTxt] = useState('');
+  const [tempFilters, setTempFilters] = useState([]);
+
   const currentFilters = activeFilters[filterKey] || [];
   const isActive = currentFilters.length > 0;
 
+  useEffect(() => {
+    if (isOpen) {
+      setTempFilters(currentFilters);
+      setSearchTxt('');
+    }
+  }, [isOpen]);
+
+  const visibleOptions = options.filter(opt => String(opt).toLowerCase().includes(searchTxt.toLowerCase()));
+  const isAllVisibleSelected = visibleOptions.length > 0 && visibleOptions.every(opt => tempFilters.includes(opt));
+
+  const toggleFilter = (val) => {
+    setTempFilters(prev => prev.includes(val) ? prev.filter(item => item !== val) : [...prev, val]);
+  };
+
+  const toggleAllVisible = () => {
+    if (isAllVisibleSelected) {
+      setTempFilters(prev => prev.filter(f => !visibleOptions.includes(f)));
+    } else {
+      const merged = Array.from(new Set([...tempFilters, ...visibleOptions]));
+      setTempFilters(merged);
+    }
+  };
+
+  const clearAll = () => setTempFilters([]);
+
+  const applyFilters = () => {
+    setColumnFilters(prev => ({ ...prev, [filterKey]: tempFilters }));
+    setIsOpen(false);
+  };
+
   return (
     <div className="relative inline-block ml-1">
-      <button onClick={() => setIsOpen(!isOpen)} className={`p-0.5 rounded transition-colors ${isActive ? 'text-blue-600 bg-blue-100' : 'text-slate-400 hover:bg-slate-200 hover:text-slate-600'}`}><Filter size={11} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 3 : 2} /></button>
+      <button onClick={() => setIsOpen(!isOpen)} className={`p-0.5 rounded transition-colors ${isActive ? 'text-blue-600 bg-blue-100' : 'text-slate-400 hover:bg-slate-200 hover:text-slate-600'}`}>
+        <Filter size={11} fill={isActive ? "currentColor" : "none"} strokeWidth={isActive ? 3 : 2} />
+      </button>
+
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-300 shadow-xl rounded-md w-60 z-50 flex flex-col max-h-64 text-slate-700 font-medium normal-case">
-            <div className="p-2 border-b border-slate-100 flex justify-between gap-2 bg-slate-50 rounded-t-md">
-              <button onClick={selectAll} className="text-[10px] font-bold text-blue-600 hover:underline">Select All</button>
-              <button onClick={clearAll} className="text-[10px] font-bold text-red-600 hover:underline">Clear</button>
+          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-300 shadow-xl rounded-md w-60 z-50 flex flex-col font-medium normal-case">
+            <div className="p-2 border-b border-slate-200 flex flex-col gap-2 bg-slate-50 rounded-t-md">
+              <div className="relative">
+                 <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                 <input 
+                    type="text" 
+                    placeholder="Search filter..." 
+                    value={searchTxt} 
+                    onChange={e => setSearchTxt(e.target.value)}
+                    className="w-full pl-6 pr-2 py-1 text-[11px] border border-slate-300 rounded outline-none focus:border-blue-500 shadow-inner bg-white"
+                 />
+              </div>
+              <div className="flex justify-between items-center px-1">
+                <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 cursor-pointer hover:text-blue-600 transition-colors">
+                   <input type="checkbox" checked={isAllVisibleSelected} onChange={toggleAllVisible} className="rounded border-slate-300 w-3 h-3 text-blue-600 focus:ring-blue-500" />
+                   (Select All Search Results)
+                </label>
+                <button onClick={clearAll} className="text-[10px] font-bold text-red-600 hover:underline">Clear</button>
+              </div>
             </div>
-            <div className="overflow-y-auto p-1.5 flex flex-col gap-0.5">
-              {options.length === 0 && <span className="text-[10px] text-slate-400 italic p-1">No data</span>}
-              {options.map(opt => (
+            
+            <div className="overflow-y-auto p-1.5 flex flex-col gap-0.5 max-h-48">
+              {visibleOptions.length === 0 && <span className="text-[10px] text-slate-400 italic p-2 text-center">No matches found</span>}
+              {visibleOptions.map(opt => (
                 <label key={opt} className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-slate-100 p-1.5 rounded transition-colors">
-                  <input type="checkbox" checked={currentFilters.includes(opt)} onChange={() => toggleFilter(opt)} className="rounded border-slate-300 w-3 h-3 text-blue-600 focus:ring-blue-500 shrink-0" />
+                  <input type="checkbox" checked={tempFilters.includes(opt)} onChange={() => toggleFilter(opt)} className="rounded border-slate-300 w-3 h-3 text-blue-600 focus:ring-blue-500 shrink-0" />
                   <span className="truncate flex-1" title={opt === '' ? '(Blanks)' : opt}>{opt === '' ? '(Blanks)' : opt}</span>
                 </label>
               ))}
+            </div>
+
+            <div className="p-2 border-t border-slate-200 flex justify-end gap-2 bg-slate-50 rounded-b-md">
+               <button onClick={() => setIsOpen(false)} className="px-3 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-200 rounded transition-colors">Cancel</button>
+               <button onClick={applyFilters} className="px-4 py-1 text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm transition-colors">OK</button>
             </div>
           </div>
         </>
@@ -181,23 +251,49 @@ export default function PunchlistMaster() {
     status: [...new Set(punchlists.map(p => String(p.status)))].sort(),
   };
 
+  // ================= BƯỚC 1: TẠO BỘ LỌC CƠ SỞ (SEARCH + COLUMN FILTERS) =================
+  const baseFilteredList = punchlists.filter(p => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchSearch = String(p.tagNo).toLowerCase().includes(searchLower) || 
+                        String(p.punchId).toLowerCase().includes(searchLower) || 
+                        String(p.defect).toLowerCase().includes(searchLower) || 
+                        String(p.assignee).toLowerCase().includes(searchLower) || 
+                        String(p.raiseBy).toLowerCase().includes(searchLower) || 
+                        String(p.corrAction).toLowerCase().includes(searchLower);
+    
+    const matchPunchId = columnFilters.punchId?.length ? columnFilters.punchId.includes(String(p.punchId)) : true;
+    const matchTag = columnFilters.tagNo?.length ? columnFilters.tagNo.includes(String(p.tagNo)) : true;
+    const matchSys = columnFilters.system?.length ? columnFilters.system.includes(String(p.system)) : true;
+    const matchSubSys = columnFilters.subSystem?.length ? columnFilters.subSystem.includes(String(p.subSystem)) : true;
+    const matchDefect = columnFilters.defect?.length ? columnFilters.defect.includes(String(p.defect)) : true;
+    const matchCorrAct = columnFilters.corrAct?.length ? columnFilters.corrAct.includes(String(p.corrAction)) : true;
+    const matchCat = columnFilters.category?.length ? columnFilters.category.includes(String(p.category)) : true;
+    const matchAssign = columnFilters.assignee?.length ? columnFilters.assignee.includes(String(p.assignee)) : true;
+    const matchRaise = columnFilters.raiseBy?.length ? columnFilters.raiseBy.includes(String(p.raiseBy)) : true;
+    const matchRaiseDate = columnFilters.raiseDate?.length ? columnFilters.raiseDate.includes(p.dateRaised ? formatToExcelDate(p.dateRaised) : '') : true;
+    const matchExpClear = columnFilters.expClear?.length ? columnFilters.expClear.includes(p.expClearDate ? formatToExcelDate(p.expClearDate) : '') : true;
+    const matchClosedDate = columnFilters.closedDate?.length ? columnFilters.closedDate.includes(p.closedDate ? formatToExcelDate(p.closedDate) : '') : true;
+    const matchPhase = columnFilters.phase?.length ? columnFilters.phase.includes(String(p.phaseOrigin)) : true;
+    const matchStat = columnFilters.status?.length ? columnFilters.status.includes(String(p.status)) : true;
+
+    return matchSearch && matchPunchId && matchTag && matchSys && matchSubSys && matchDefect && matchCorrAct && matchCat && matchAssign && matchRaise && matchRaiseDate && matchExpClear && matchClosedDate && matchPhase && matchStat;
+  });
+
+  // ================= BƯỚC 2: TÍNH TOÁN KPI DỰA TRÊN BỘ LỌC CƠ SỞ =================
   const stats = {
-    total: punchlists.length,
-    a_open: punchlists.filter(p => p.category === 'A' && p.status === 'OPEN').length,
-    a_closed: punchlists.filter(p => p.category === 'A' && p.status === 'CLOSED').length,
-    b_open: punchlists.filter(p => p.category === 'B' && p.status === 'OPEN').length,
-    b_closed: punchlists.filter(p => p.category === 'B' && p.status === 'CLOSED').length,
-    c_open: punchlists.filter(p => p.category === 'C' && p.status === 'OPEN').length,
-    c_closed: punchlists.filter(p => p.category === 'C' && p.status === 'CLOSED').length,
-    duplicates: punchlists.filter(isDuplicate).length
+    total: baseFilteredList.length,
+    a_open: baseFilteredList.filter(p => p.category === 'A' && p.status === 'OPEN').length,
+    a_closed: baseFilteredList.filter(p => p.category === 'A' && p.status === 'CLOSED').length,
+    b_open: baseFilteredList.filter(p => p.category === 'B' && p.status === 'OPEN').length,
+    b_closed: baseFilteredList.filter(p => p.category === 'B' && p.status === 'CLOSED').length,
+    c_open: baseFilteredList.filter(p => p.category === 'C' && p.status === 'OPEN').length,
+    c_closed: baseFilteredList.filter(p => p.category === 'C' && p.status === 'CLOSED').length,
+    duplicates: baseFilteredList.filter(isDuplicate).length
   };
 
-  // LỌC VÀ SẮP XẾP TỐI THƯỢNG (SORTING ALGORITHM)
+  // ================= BƯỚC 3: ÁP DỤNG KPI FILTERS ĐỂ HIỂN THỊ BẢNG (SORTING KÈM THEO) =================
   const displayList = useMemo(() => {
-    let filtered = punchlists.filter(p => {
-      const searchLower = searchTerm.toLowerCase();
-      const matchSearch = String(p.tagNo).toLowerCase().includes(searchLower) || String(p.punchId).toLowerCase().includes(searchLower) || String(p.defect).toLowerCase().includes(searchLower) || String(p.assignee).toLowerCase().includes(searchLower) || String(p.raiseBy).toLowerCase().includes(searchLower) || String(p.corrAction).toLowerCase().includes(searchLower);
-      
+    let filtered = baseFilteredList.filter(p => {
       let matchKPI = true;
       if (statusFilters.length > 0) {
         matchKPI = false;
@@ -209,27 +305,10 @@ export default function PunchlistMaster() {
         if (statusFilters.includes('BLACK_CLOSED') && p.category === 'C' && p.status === 'CLOSED') matchKPI = true;
         if (statusFilters.includes('DUPLICATES') && isDuplicate(p)) matchKPI = true; 
       }
-
-      const matchPunchId = columnFilters.punchId?.length ? columnFilters.punchId.includes(String(p.punchId)) : true;
-      const matchTag = columnFilters.tagNo?.length ? columnFilters.tagNo.includes(String(p.tagNo)) : true;
-      const matchSys = columnFilters.system?.length ? columnFilters.system.includes(String(p.system)) : true;
-      const matchSubSys = columnFilters.subSystem?.length ? columnFilters.subSystem.includes(String(p.subSystem)) : true;
-      const matchDefect = columnFilters.defect?.length ? columnFilters.defect.includes(String(p.defect)) : true;
-      const matchCorrAct = columnFilters.corrAct?.length ? columnFilters.corrAct.includes(String(p.corrAction)) : true;
-      const matchCat = columnFilters.category?.length ? columnFilters.category.includes(String(p.category)) : true;
-      const matchAssign = columnFilters.assignee?.length ? columnFilters.assignee.includes(String(p.assignee)) : true;
-      const matchRaise = columnFilters.raiseBy?.length ? columnFilters.raiseBy.includes(String(p.raiseBy)) : true;
-      const matchRaiseDate = columnFilters.raiseDate?.length ? columnFilters.raiseDate.includes(p.dateRaised ? formatToExcelDate(p.dateRaised) : '') : true;
-      const matchExpClear = columnFilters.expClear?.length ? columnFilters.expClear.includes(p.expClearDate ? formatToExcelDate(p.expClearDate) : '') : true;
-      const matchClosedDate = columnFilters.closedDate?.length ? columnFilters.closedDate.includes(p.closedDate ? formatToExcelDate(p.closedDate) : '') : true;
-      const matchPhase = columnFilters.phase?.length ? columnFilters.phase.includes(String(p.phaseOrigin)) : true;
-      const matchStat = columnFilters.status?.length ? columnFilters.status.includes(String(p.status)) : true;
-
-      return matchSearch && matchKPI && matchPunchId && matchTag && matchSys && matchSubSys && matchDefect && matchCorrAct && matchCat && matchAssign && matchRaise && matchRaiseDate && matchExpClear && matchClosedDate && matchPhase && matchStat;
+      return matchKPI;
     });
 
     if (statusFilters.includes('DUPLICATES')) {
-        // Sắp xếp đặc biệt khi soi lỗi trùng lặp: Tag No -> Mô tả lỗi
         filtered.sort((a, b) => {
             const keyA = `${a.tagNo}___${a.defect}`.toLowerCase();
             const keyB = `${b.tagNo}___${b.defect}`.toLowerCase();
@@ -238,7 +317,6 @@ export default function PunchlistMaster() {
             return String(a.punchId).localeCompare(String(b.punchId));
         });
     } else {
-        // Sắp xếp mặc định: Tag No -> Phase -> Punch ID
         filtered.sort((a, b) => {
             const tagA = String(a.tagNo || '').toUpperCase();
             const tagB = String(b.tagNo || '').toUpperCase();
@@ -254,7 +332,7 @@ export default function PunchlistMaster() {
         });
     }
     return filtered;
-  }, [punchlists, searchTerm, statusFilters, columnFilters]);
+  }, [baseFilteredList, statusFilters]);
 
   const getDays = (d) => { if(!d) return 0; return Math.floor(Math.abs(new Date() - new Date(d)) / (1000 * 60 * 60 * 24)); };
   
