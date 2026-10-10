@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 import { 
   Search, AlertCircle, CheckCircle2, CheckSquare, RotateCcw, 
   Paperclip, FileCheck, X, Loader, Download, Clock, Printer, 
-  FileSpreadsheet, Filter, Trash2, Copy 
+  FileSpreadsheet, Filter, Trash2, Copy, Sparkles, ShieldCheck 
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -174,6 +174,12 @@ export default function PunchlistMaster() {
   const [punchlists, setPunchlists] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilters, setStatusFilters] = useState([]);
+  const [verificationFilter, setVerificationFilter] = useState('ALL'); 
+  
+  // ================= STATE DÀNH RIÊNG CHO QC VERIFICATION =================
+  const [unverifiedNewPunches, setUnverifiedNewPunches] = useState([]);
+  const [unverifiedClosedPunches, setUnverifiedClosedPunches] = useState([]);
+  // =======================================================================
   
   const [columnFilters, setColumnFilters] = useState({
     punchId: [], tagNo: [], system: [], subSystem: [], defect: [], corrAct: [], category: [], 
@@ -214,8 +220,46 @@ export default function PunchlistMaster() {
     } catch (err) { console.error("Lỗi khi tải danh sách Punchlist:", err); }
   }
 
-  useEffect(() => { fetchPunchlists(); }, []);
-  useEffect(() => { const storedDate = localStorage.getItem('projectDataDate'); if (storedDate) setDataDate(storedDate); }, [punchlists]);
+  // Lấy danh sách ID chờ Verify từ LocalStorage mỗi khi mở lại trang
+  useEffect(() => { 
+    fetchPunchlists(); 
+    const storedNew = JSON.parse(localStorage.getItem('unverifiedNewPunches') || '[]');
+    const storedClosed = JSON.parse(localStorage.getItem('unverifiedClosedPunches') || '[]');
+    setUnverifiedNewPunches(storedNew);
+    setUnverifiedClosedPunches(storedClosed);
+  }, []);
+  
+  useEffect(() => { 
+    const storedDate = localStorage.getItem('projectDataDate'); 
+    if (storedDate) setDataDate(storedDate); 
+  }, [punchlists]);
+
+  // ================= CÁC HÀM XỬ LÝ VERIFY QC =================
+  const verifySinglePunch = (punchId, type) => {
+      if (type === 'NEW') {
+          const updated = unverifiedNewPunches.filter(id => id !== String(punchId));
+          setUnverifiedNewPunches(updated);
+          localStorage.setItem('unverifiedNewPunches', JSON.stringify(updated));
+      } else {
+          const updated = unverifiedClosedPunches.filter(id => id !== String(punchId));
+          setUnverifiedClosedPunches(updated);
+          localStorage.setItem('unverifiedClosedPunches', JSON.stringify(updated));
+      }
+      
+      // Nếu Verify xong mà mảng trống trơn thì tự động nhảy về view ALL
+      if (type === 'NEW' && unverifiedNewPunches.length <= 1 && verificationFilter === 'NEW') setVerificationFilter('ALL');
+      if (type === 'CLOSED' && unverifiedClosedPunches.length <= 1 && verificationFilter === 'JUST_CLOSED') setVerificationFilter('ALL');
+  };
+
+  const verifyAllPunches = () => {
+      if (!window.confirm(`Bạn có chắc muốn Verify xác nhận toàn bộ lỗi đã đối chiếu đúng với bản cứng?`)) return;
+      setUnverifiedNewPunches([]);
+      setUnverifiedClosedPunches([]);
+      localStorage.removeItem('unverifiedNewPunches');
+      localStorage.removeItem('unverifiedClosedPunches');
+      setVerificationFilter('ALL');
+  };
+  // ==========================================================
 
   const handleResizeStart = (e, colKey) => {
     e.preventDefault(); const startX = e.clientX; const startWidth = colWidths[colKey] || 100;
@@ -251,8 +295,15 @@ export default function PunchlistMaster() {
     status: [...new Set(punchlists.map(p => String(p.status)))].sort(),
   };
 
-  // ================= BƯỚC 1: TẠO BỘ LỌC CƠ SỞ (SEARCH + COLUMN FILTERS) =================
+  // ================= BƯỚC 1: TẠO BỘ LỌC CƠ SỞ (SEARCH + COLUMN FILTERS + VERIFICATION) =================
   const baseFilteredList = punchlists.filter(p => {
+    // Đọc từ LocalStorage State thay vì so sánh Date
+    const isNewlyAdded = unverifiedNewPunches.includes(String(p.punchId));
+    const isJustClosed = unverifiedClosedPunches.includes(String(p.punchId));
+
+    if (verificationFilter === 'NEW' && !isNewlyAdded) return false;
+    if (verificationFilter === 'JUST_CLOSED' && !isJustClosed) return false;
+
     const searchLower = searchTerm.toLowerCase();
     const matchSearch = String(p.tagNo).toLowerCase().includes(searchLower) || 
                         String(p.punchId).toLowerCase().includes(searchLower) || 
@@ -455,13 +506,39 @@ export default function PunchlistMaster() {
         </div>
       )}
 
-      {/* THANH CÔNG CỤ TOOLBAR */}
-      <div className="flex justify-end items-center px-6 pt-4 pb-2 shrink-0 bg-white border-b border-slate-200 z-30 relative">
+      {/* THANH CÔNG CỤ TOOLBAR CHÍNH */}
+      <div className="flex justify-between items-center px-6 pt-4 pb-2 shrink-0 bg-white border-b border-slate-200 z-30 relative">
          <div className="flex gap-2">
-            <button onClick={handleClearAllPunches} className="px-3 h-[32px] bg-white hover:bg-red-50 text-red-600 border border-slate-200 hover:border-red-200 font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm" title="Xóa toàn bộ Punchlist trên hệ thống">
-               <Trash2 size={14}/> Clear All Punch
+            <button onClick={handleClearAllPunches} className="px-3 h-[32px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm" title="Xóa toàn bộ Punchlist trên hệ thống">
+               <Trash2 size={14}/> FACTORY RESET
             </button>
-            <div className="w-px bg-slate-200 mx-1"></div>
+         </div>
+
+         <div className="flex gap-2">
+            {/* DẢI BĂNG VERIFICATION MODE - KIỂM CHỨNG TỪ LOCALSTORAGE */}
+            {(unverifiedNewPunches.length > 0 || unverifiedClosedPunches.length > 0) && (
+              <div className="flex items-center bg-slate-800 text-white rounded-md p-1 mr-4 shadow-lg animate-in slide-in-from-right duration-300">
+                <span className="text-[10px] font-black uppercase px-3 text-slate-300 flex items-center gap-1"><ShieldCheck size={12}/> Verify Mode:</span>
+                
+                {unverifiedNewPunches.length > 0 && (
+                  <button onClick={() => setVerificationFilter(verificationFilter === 'NEW' ? 'ALL' : 'NEW')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'NEW' ? 'bg-yellow-500 text-yellow-900' : 'hover:bg-slate-700 text-yellow-400'}`}>
+                     {unverifiedNewPunches.length} [NEW]
+                  </button>
+                )}
+                
+                {unverifiedClosedPunches.length > 0 && (
+                  <button onClick={() => setVerificationFilter(verificationFilter === 'JUST_CLOSED' ? 'ALL' : 'JUST_CLOSED')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'JUST_CLOSED' ? 'bg-emerald-500 text-emerald-900' : 'hover:bg-slate-700 text-emerald-400'}`}>
+                     {unverifiedClosedPunches.length} [JUST CLOSED]
+                  </button>
+                )}
+                
+                <div className="w-px bg-slate-600 h-4 mx-2"></div>
+                <button onClick={verifyAllPunches} className="px-3 py-1 rounded text-xs font-bold hover:bg-emerald-500 hover:text-white transition-colors text-emerald-300 flex items-center gap-1" title="Xác nhận hàng loạt tất cả các lỗi đã hiển thị">
+                   <CheckCircle2 size={12}/> Verify All
+                </button>
+              </div>
+            )}
+
             <button onClick={fetchPunchlists} className="p-1.5 border border-slate-200 rounded-md shadow-sm hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer flex items-center justify-center"><RotateCcw size={16} strokeWidth={2.5} /></button>
             <button onClick={handlePrintListPDF} className="group bg-white border border-slate-200 hover:border-slate-300 shadow-sm rounded-md px-3.5 py-1.5 flex items-center gap-2 transition-colors cursor-pointer text-slate-700 hover:bg-slate-50"><Printer size={15} strokeWidth={2.5} className="text-slate-500 group-hover:text-slate-700" /><span className="font-bold text-[13px] text-slate-600">PDF / PRINT</span></button>
             <button onClick={exportToExcel} className="group bg-white border border-slate-200 hover:border-slate-300 shadow-sm rounded-md px-3.5 py-1.5 flex items-center gap-2 transition-colors cursor-pointer text-emerald-700 hover:bg-emerald-50"><FileSpreadsheet size={15} strokeWidth={2.5} className="text-emerald-600 group-hover:text-emerald-700" /><span className="font-bold text-[13px] text-emerald-700">EXCEL</span></button>
@@ -537,14 +614,24 @@ export default function PunchlistMaster() {
               {displayList.map((pl, i) => {
                 const days = getDays(pl.dateRaised);
                 const isDup = isDuplicate(pl);
+                
+                // KIỂM TRA HIGHLIGHT TỪ LOCALSTORAGE
+                const isNewlyAdded = unverifiedNewPunches.includes(String(pl.punchId));
+                const isJustClosed = unverifiedClosedPunches.includes(String(pl.punchId));
 
-                let rowBgClass = "hover:bg-slate-50";
-                if (isDup) rowBgClass = "bg-pink-50 hover:bg-pink-100";
+                let rowBgClass = "hover:bg-slate-50 bg-white";
+                if (isNewlyAdded) rowBgClass = "bg-yellow-50 hover:bg-yellow-100 shadow-inner";
+                else if (isJustClosed) rowBgClass = "bg-emerald-50 hover:bg-emerald-100 shadow-inner";
+                else if (isDup) rowBgClass = "bg-pink-50 hover:bg-pink-100";
 
                 return (
                   <tr key={i} className={`transition-colors ${rowBgClass}`}>
-                    <td className={`p-3 pl-4 border-r border-slate-300 align-top sticky left-0 z-20 shadow-[1px_0_0_0_#cbd5e1] ${isDup ? 'bg-pink-50' : 'bg-white'}`}>
-                      <span className={`font-black text-[11px] w-full block px-2 py-0.5 rounded text-center border ${isDup ? 'bg-pink-100 text-pink-700 border-pink-200' : 'bg-slate-100 text-slate-800 border-slate-200'}`}>{pl.punchId}</span>
+                    <td className={`p-3 pl-4 border-r border-slate-300 align-top sticky left-0 z-20 shadow-[1px_0_0_0_#cbd5e1] ${isNewlyAdded ? 'bg-yellow-50' : isJustClosed ? 'bg-emerald-50' : isDup ? 'bg-pink-50' : 'bg-white'}`}>
+                      <span className={`font-black text-[11px] w-full block px-2 py-0.5 rounded text-center border relative ${isNewlyAdded ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : isJustClosed ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : isDup ? 'bg-pink-100 text-pink-700 border-pink-200' : 'bg-slate-100 text-slate-800 border-slate-200'}`}>
+                         {isNewlyAdded && <span className="absolute -top-2 -left-2 bg-yellow-500 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm animate-pulse z-10"><Sparkles size={8}/> NEW</span>}
+                         {isJustClosed && <span className="absolute -top-2 -left-2 bg-emerald-500 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm z-10"><CheckCircle2 size={8}/> CLOSED</span>}
+                         {pl.punchId}
+                      </span>
                     </td>
                     <td className={`p-3 border-r border-slate-300 text-[11px] text-left font-black align-top ${isDup ? 'text-pink-600' : 'text-blue-600'}`}>{pl.tagNo}</td>
                     <td className="p-3 border-r border-slate-300 text-[11px] font-bold text-slate-600 align-top text-center">{pl.system}</td>
@@ -565,13 +652,25 @@ export default function PunchlistMaster() {
                     <td className="p-3 border-r border-slate-300 align-top text-center text-[11px] font-black">{pl.status === 'CLOSED' ? <span className="text-slate-300">-</span> : <span><Clock size={12} className="inline mr-1 opacity-50"/>{days} d</span>}</td>
                     <td className="p-3 align-top text-center border-l border-slate-300">
                       <div className="flex justify-center items-center gap-1.5 flex-wrap">
-                        {pl.status === 'OPEN' ? (
-                          <button onClick={() => setCloseModal({ isOpen: true, item: pl, note: '', file: null, uploading: false })} className={`flex items-center gap-1 text-[10px] font-black transition-colors bg-white px-2.5 py-1.5 rounded border shadow-sm ${isDup ? 'text-pink-600 border-pink-300 hover:bg-pink-100 hover:text-pink-800' : 'text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-800'}`}><CheckSquare size={13} className="inline mr-0.5"/> Close</button>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            {pl.evidenceUrl && (<button onClick={() => window.open(pl.evidenceUrl, '_blank')} className="flex items-center justify-center p-1.5 bg-white text-slate-500 hover:text-blue-600 rounded border border-slate-200 shadow-sm transition-colors" title="View Evidence"><FileCheck size={12}/></button>)}
-                            <button onClick={() => handleReopen(pl)} className="flex items-center justify-center p-1.5 bg-white text-slate-500 hover:text-orange-600 rounded border border-slate-200 shadow-sm transition-colors" title="Re-open Punch"><RotateCcw size={12}/></button>
-                          </div>
+                        
+                        {/* NÚT VERIFY TỪNG DÒNG (CHỈ HIỆN KHI ĐANG BỊ HIGHLIGHT CHỜ VERIFY) */}
+                        {isNewlyAdded && (
+                           <button onClick={() => verifySinglePunch(pl.punchId, 'NEW')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-yellow-50 text-yellow-600 px-2 py-1.5 rounded border border-yellow-300 hover:bg-yellow-500 hover:text-white shadow-sm" title="Xác nhận lỗi này đã dò xong"><CheckCircle2 size={13} className="inline mr-0.5"/> Verify</button>
+                        )}
+                        {isJustClosed && (
+                           <button onClick={() => verifySinglePunch(pl.punchId, 'CLOSED')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-emerald-50 text-emerald-600 px-2 py-1.5 rounded border border-emerald-300 hover:bg-emerald-500 hover:text-white shadow-sm" title="Xác nhận lỗi này đã dò xong"><CheckCircle2 size={13} className="inline mr-0.5"/> Verify</button>
+                        )}
+
+                        {/* CÁC NÚT BẤM CŨ CỦA BẠN ĐƯỢC GIỮ NGUYÊN */}
+                        {(!isNewlyAdded && !isJustClosed) && (
+                          pl.status === 'OPEN' ? (
+                            <button onClick={() => setCloseModal({ isOpen: true, item: pl, note: '', file: null, uploading: false })} className={`flex items-center gap-1 text-[10px] font-black transition-colors bg-white px-2.5 py-1.5 rounded border shadow-sm ${isDup ? 'text-pink-600 border-pink-300 hover:bg-pink-100 hover:text-pink-800' : 'text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-800'}`}><CheckSquare size={13} className="inline mr-0.5"/> Close</button>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              {pl.evidenceUrl && (<button onClick={() => window.open(pl.evidenceUrl, '_blank')} className="flex items-center justify-center p-1.5 bg-white text-slate-500 hover:text-blue-600 rounded border border-slate-200 shadow-sm transition-colors" title="View Evidence"><FileCheck size={12}/></button>)}
+                              <button onClick={() => handleReopen(pl)} className="flex items-center justify-center p-1.5 bg-white text-slate-500 hover:text-orange-600 rounded border border-slate-200 shadow-sm transition-colors" title="Re-open Punch"><RotateCcw size={12}/></button>
+                            </div>
+                          )
                         )}
                         <button onClick={() => handleDeletePunch(pl)} className={`p-1.5 bg-white rounded border shadow-sm transition-colors ${isDup ? 'text-pink-500 border-pink-300 hover:text-red-700 hover:bg-pink-100' : 'text-slate-400 border-slate-200 hover:text-red-600 hover:bg-red-50'}`} title="Delete Punch"><Trash2 size={12}/></button>
                       </div>

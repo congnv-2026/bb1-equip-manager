@@ -106,6 +106,8 @@ export default function CompletionsDashboard() {
             await supabase.from('punchlist_matrix').delete().neq('id', 0);
             await supabase.from('subsystem_handovers').delete().neq('id', 0);
             localStorage.removeItem('projectDataDate');
+            localStorage.removeItem('unverifiedNewPunches');
+            localStorage.removeItem('unverifiedClosedPunches');
             setDataDate('N/A');
             await fetchData();
             alert('✅ ĐÃ DỌN SẠCH TOÀN BỘ DỮ LIỆU.');
@@ -129,7 +131,7 @@ export default function CompletionsDashboard() {
 
     let livePunch = []; let hasMorePunch = true; let fromPunch = 0;
     while (hasMorePunch) {
-        const { data } = await supabase.from('punchlist_matrix').select('id, punch_id').range(fromPunch, fromPunch + 999);
+        const { data } = await supabase.from('punchlist_matrix').select('id, punch_id, status').range(fromPunch, fromPunch + 999);
         if (!data || data.length===0) hasMorePunch=false; else { livePunch=[...livePunch, ...data]; fromPunch+=1000; }
     }
 
@@ -160,6 +162,11 @@ export default function CompletionsDashboard() {
             
             const updatesItr = {}; const insertsItr = {}; 
             const updatesPunch = {}; const insertsPunch = {}; 
+            
+            // LƯU TRỮ ID CHỜ VERIFY
+            const trackedNewItems = [];
+            const trackedClosedItems = [];
+            
             let stats = { itrInsert: 0, itrUpdate: 0, punchInsert: 0, punchUpdate: 0 };
 
             const processItrSheet = () => {
@@ -263,6 +270,13 @@ export default function CompletionsDashboard() {
 
                         const targetPunch = insertsPunch[plKey] || updatesPunch[plKey] || punchMap[plKey];
                         
+                        // LÝ LUẬN VERIFY CHÍNH XÁC 100%
+                        if (!punchMap[plKey]) {
+                            trackedNewItems.push(plNo);
+                        } else if (targetPunch && targetPunch.status !== 'CLOSED' && status === 'CLOSED') {
+                            trackedClosedItems.push(plNo);
+                        }
+
                         const buildPayload = (existingId) => ({
                             ...(existingId ? { id: existingId } : {}),
                             punch_id: plNo, tag_no: originalTagNo, system_no: sysNo, sub_system_no: subSysNo,
@@ -317,8 +331,18 @@ export default function CompletionsDashboard() {
                 }
             }
 
+            // GHI NHỚ ID CẦN VERIFY VÀO LOCALSTORAGE (CỘNG DỒN)
+            const currentNew = JSON.parse(localStorage.getItem('unverifiedNewPunches') || '[]');
+            const currentClosed = JSON.parse(localStorage.getItem('unverifiedClosedPunches') || '[]');
+            
+            const mergedNew = Array.from(new Set([...currentNew, ...trackedNewItems]));
+            const mergedClosed = Array.from(new Set([...currentClosed, ...trackedClosedItems]));
+            
+            localStorage.setItem('unverifiedNewPunches', JSON.stringify(mergedNew));
+            localStorage.setItem('unverifiedClosedPunches', JSON.stringify(mergedClosed));
+
             await fetchData();
-            alert(`✅ NHẬP DỮ LIỆU ĐA SHEET THÀNH CÔNG!\n- Ngày dữ liệu: ${formattedDate}\n- ITR (Tạo mới: ${stats.itrInsert}, Cập nhật: ${stats.itrUpdate})\n- Punchlist (Tạo mới: ${stats.punchInsert}, Cập nhật: ${stats.punchUpdate})`);
+            alert(`✅ NHẬP DỮ LIỆU ĐA SHEET THÀNH CÔNG!\nNgày dữ liệu: ${formattedDate}\nITR (Tạo mới: ${stats.itrInsert}, Cập nhật: ${stats.itrUpdate})\nPunchlist (Tạo mới: ${stats.punchInsert}, Đóng/Cập nhật: ${stats.punchUpdate})`);
 
         } catch (err) { alert("Lỗi khi import file Excel: " + err.message); } 
         finally { setIsImporting(false); e.target.value = null; }
@@ -352,15 +376,13 @@ export default function CompletionsDashboard() {
   punchlists.forEach(pl => {
       const sub = pl.sub_system_no; if(!sub || !subSystemsMap[sub]) return;
       
-      // LOGIC XỬ LÝ PHASE_ORIGIN NỘI SUY
       let plPhase = pl.phase_origin;
       if (plPhase === 'N/A' || !plPhase) {
-          // Lấy Tag của Punchlist đem so với danh sách Thiết bị ITR để đoán Phase
           const tagInfo = equipList.find(e => getCompareKey(e.tag_no) === getCompareKey(pl.tag_no));
           if (tagInfo) plPhase = tagInfo.phase;
       }
       
-      if (plPhase !== activePhaseTab) return; // Chỉ tính Punchlist của Phase đang bật
+      if (plPhase !== activePhaseTab) return; 
 
       const isClosed = pl.status === 'CLOSED';
       if (pl.category === 'A') isClosed ? subSystemsMap[sub].punchA_closed++ : subSystemsMap[sub].punchA_open++;
