@@ -105,9 +105,7 @@ export default function CompletionsDashboard() {
             await supabase.from('itr_matrix').delete().neq('id', 0);
             await supabase.from('punchlist_matrix').delete().neq('id', 0);
             await supabase.from('subsystem_handovers').delete().neq('id', 0);
-            localStorage.removeItem('projectDataDate');
-            localStorage.removeItem('unverifiedNewPunches');
-            localStorage.removeItem('unverifiedClosedPunches');
+            localStorage.clear();
             setDataDate('N/A');
             await fetchData();
             alert('✅ ĐÃ DỌN SẠCH TOÀN BỘ DỮ LIỆU.');
@@ -125,13 +123,13 @@ export default function CompletionsDashboard() {
 
     let liveItr = []; let hasMoreItr = true; let fromItr = 0;
     while (hasMoreItr) {
-        const { data } = await supabase.from('itr_matrix').select('id, tag_no, checksheet_type').range(fromItr, fromItr + 999);
+        const { data } = await supabase.from('itr_matrix').select('id, tag_no, checksheet_type, sub_system_no, itr_status').range(fromItr, fromItr + 999);
         if (!data || data.length===0) hasMoreItr=false; else { liveItr=[...liveItr, ...data]; fromItr+=1000; }
     }
 
     let livePunch = []; let hasMorePunch = true; let fromPunch = 0;
     while (hasMorePunch) {
-        const { data } = await supabase.from('punchlist_matrix').select('id, punch_id, status').range(fromPunch, fromPunch + 999);
+        const { data } = await supabase.from('punchlist_matrix').select('id, punch_id, status, sub_system_no').range(fromPunch, fromPunch + 999);
         if (!data || data.length===0) hasMorePunch=false; else { livePunch=[...livePunch, ...data]; fromPunch+=1000; }
     }
 
@@ -163,9 +161,17 @@ export default function CompletionsDashboard() {
             const updatesItr = {}; const insertsItr = {}; 
             const updatesPunch = {}; const insertsPunch = {}; 
             
-            // LƯU TRỮ ID CHỜ VERIFY
-            const trackedNewItems = [];
-            const trackedClosedItems = [];
+            // LƯU TRỮ ID CHỜ VERIFY - ITR
+            const trackedNewItrs = [];
+            const trackedCompletedItrs = [];
+            const importedItrKeys = new Set();
+            const importedItrSubSystems = new Set();
+
+            // LƯU TRỮ ID CHỜ VERIFY - PUNCHLIST
+            const trackedNewPunches = [];
+            const trackedClosedPunches = [];
+            const importedPunchKeys = new Set();
+            const importedPunchSubSystems = new Set();
             
             let stats = { itrInsert: 0, itrUpdate: 0, punchInsert: 0, punchUpdate: 0 };
 
@@ -206,7 +212,19 @@ export default function CompletionsDashboard() {
                             if (parts.length >= 2) sysNo = `${parts[0]}-${parts[1]}`; else sysNo = subSysNo;
                         }
 
+                        // Tracking ITRs
+                        importedItrKeys.add(eqKey);
+                        if (subSysNo) importedItrSubSystems.add(subSysNo);
+
                         const targetEq = insertsItr[eqKey] || updatesItr[eqKey] || itrMap[eqKey];
+                        
+                        // LÝ LUẬN VERIFY ITR CHÍNH XÁC
+                        if (!itrMap[eqKey]) {
+                            trackedNewItrs.push(eqKey);
+                        } else if (targetEq && targetEq.itr_status !== 'Completed' && completeDateStr) {
+                            trackedCompletedItrs.push(eqKey);
+                        }
+
                         const buildPayload = (existingId) => ({
                             ...(existingId ? { id: existingId } : {}),
                             tag_no: originalTagNo,
@@ -268,13 +286,17 @@ export default function CompletionsDashboard() {
                             if (parts.length >= 2) sysNo = `${parts[0]}-${parts[1]}`; else sysNo = subSysNo;
                         }
 
+                        // Tracking Punchlists
+                        importedPunchKeys.add(plKey);
+                        if (subSysNo) importedPunchSubSystems.add(subSysNo);
+
                         const targetPunch = insertsPunch[plKey] || updatesPunch[plKey] || punchMap[plKey];
                         
-                        // LÝ LUẬN VERIFY CHÍNH XÁC 100%
+                        // LÝ LUẬN VERIFY PUNCH CHÍNH XÁC
                         if (!punchMap[plKey]) {
-                            trackedNewItems.push(plNo);
+                            trackedNewPunches.push(plNo);
                         } else if (targetPunch && targetPunch.status !== 'CLOSED' && status === 'CLOSED') {
-                            trackedClosedItems.push(plNo);
+                            trackedClosedPunches.push(plNo);
                         }
 
                         const buildPayload = (existingId) => ({
@@ -305,6 +327,26 @@ export default function CompletionsDashboard() {
 
             setImportStatus('Đang đổ dữ liệu ITR...'); processItrSheet();
             setImportStatus('Đang bóc tách Punchlist Master...'); processPunchlistSheet();
+            
+            // ================= THUẬT TOÁN TÌM LỖI MISSING CỤC BỘ =================
+            const trackedMissingItrs = [];
+            liveItr.forEach(eq => {
+                const dbEqKey = `${getCompareKey(eq.tag_no)}_${getCompareKey(eq.checksheet_type)}`;
+                // Chỉ bắt lỗi Missing nếu Sub-System của thiết bị này CÓ MẶT trong file Excel vừa úp
+                if (eq.sub_system_no && importedItrSubSystems.has(eq.sub_system_no) && !importedItrKeys.has(dbEqKey)) {
+                    trackedMissingItrs.push(dbEqKey);
+                }
+            });
+
+            const trackedMissingPunches = [];
+            livePunch.forEach(p => {
+                // Tương tự cho Punchlist
+                if (p.sub_system_no && importedPunchSubSystems.has(p.sub_system_no) && !importedPunchKeys.has(getCompareKey(p.punch_id))) {
+                    trackedMissingPunches.push(p.punch_id);
+                }
+            });
+            // ====================================================================
+
             setImportStatus('Đang đẩy dữ liệu lên Database...');
             
             const toUpdateItr = Object.values(updatesItr); const toInsertItr = Object.values(insertsItr);
@@ -331,18 +373,19 @@ export default function CompletionsDashboard() {
                 }
             }
 
-            // GHI NHỚ ID CẦN VERIFY VÀO LOCALSTORAGE (CỘNG DỒN)
-            const currentNew = JSON.parse(localStorage.getItem('unverifiedNewPunches') || '[]');
-            const currentClosed = JSON.parse(localStorage.getItem('unverifiedClosedPunches') || '[]');
+            // GHI NHỚ ID CẦN VERIFY (CỘNG DỒN) VÀO LOCALSTORAGE CHO CẢ ITR VÀ PUNCH
+            const getParsed = (key) => JSON.parse(localStorage.getItem(key) || '[]');
             
-            const mergedNew = Array.from(new Set([...currentNew, ...trackedNewItems]));
-            const mergedClosed = Array.from(new Set([...currentClosed, ...trackedClosedItems]));
-            
-            localStorage.setItem('unverifiedNewPunches', JSON.stringify(mergedNew));
-            localStorage.setItem('unverifiedClosedPunches', JSON.stringify(mergedClosed));
+            localStorage.setItem('unverifiedNewItrs', JSON.stringify(Array.from(new Set([...getParsed('unverifiedNewItrs'), ...trackedNewItrs]))));
+            localStorage.setItem('unverifiedCompletedItrs', JSON.stringify(Array.from(new Set([...getParsed('unverifiedCompletedItrs'), ...trackedCompletedItrs]))));
+            localStorage.setItem('unverifiedMissingItrs', JSON.stringify(Array.from(new Set([...getParsed('unverifiedMissingItrs'), ...trackedMissingItrs]))));
+
+            localStorage.setItem('unverifiedNewPunches', JSON.stringify(Array.from(new Set([...getParsed('unverifiedNewPunches'), ...trackedNewPunches]))));
+            localStorage.setItem('unverifiedClosedPunches', JSON.stringify(Array.from(new Set([...getParsed('unverifiedClosedPunches'), ...trackedClosedPunches]))));
+            localStorage.setItem('unverifiedMissingPunches', JSON.stringify(Array.from(new Set([...getParsed('unverifiedMissingPunches'), ...trackedMissingPunches]))));
 
             await fetchData();
-            alert(`✅ NHẬP DỮ LIỆU ĐA SHEET THÀNH CÔNG!\nNgày dữ liệu: ${formattedDate}\nITR (Tạo mới: ${stats.itrInsert}, Cập nhật: ${stats.itrUpdate})\nPunchlist (Tạo mới: ${stats.punchInsert}, Đóng/Cập nhật: ${stats.punchUpdate})`);
+            alert(`✅ NHẬP DỮ LIỆU ĐA SHEET THÀNH CÔNG!\nNgày: ${formattedDate}\n- ITR: Thêm ${stats.itrInsert}, Cập nhật ${stats.itrUpdate}, Mất tích ${trackedMissingItrs.length}\n- Punch: Thêm ${stats.punchInsert}, Đóng ${stats.punchUpdate}, Mất tích ${trackedMissingPunches.length}`);
 
         } catch (err) { alert("Lỗi khi import file Excel: " + err.message); } 
         finally { setIsImporting(false); e.target.value = null; }

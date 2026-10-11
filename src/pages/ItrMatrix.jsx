@@ -3,7 +3,7 @@ import {
   Search, RotateCcw, X, Edit, Trash2, FileSpreadsheet, Printer, 
   RefreshCw, Hammer, Zap, CheckCircle2, CircleDashed, FileText, 
   Download, AlertTriangle, Clock, ShieldAlert, Copy, Filter,
-  Paperclip, Loader, FileCheck 
+  Paperclip, Loader, FileCheck, Sparkles, ShieldCheck 
 } from 'lucide-react';
 import { supabase } from '../supabase';
 import * as XLSX from 'xlsx';
@@ -64,7 +64,6 @@ const ColumnFilter = ({ filterKey, options, activeFilters, setColumnFilters }) =
   const currentFilters = activeFilters[filterKey] || [];
   const isActive = currentFilters.length > 0;
 
-  // Khi mở Pop-up, nạp lại trạng thái filter hiện tại vào bộ nhớ tạm
   useEffect(() => {
     if (isOpen) {
       setTempFilters(currentFilters);
@@ -79,7 +78,6 @@ const ColumnFilter = ({ filterKey, options, activeFilters, setColumnFilters }) =
     setTempFilters(prev => prev.includes(val) ? prev.filter(item => item !== val) : [...prev, val]);
   };
 
-  // Tính năng Add Current Selection To Filter
   const toggleAllVisible = () => {
     if (isAllVisibleSelected) {
       setTempFilters(prev => prev.filter(f => !visibleOptions.includes(f)));
@@ -154,6 +152,13 @@ export default function ItrMatrix() {
   
   const [activePhaseTab, setActivePhaseTab] = useState('CC'); 
   const [statusFilters, setStatusFilters] = useState([]);
+  const [verificationFilter, setVerificationFilter] = useState('ALL'); 
+
+  // ================= STATE DÀNH RIÊNG CHO QC VERIFICATION =================
+  const [unverifiedNewItrs, setUnverifiedNewItrs] = useState([]);
+  const [unverifiedCompletedItrs, setUnverifiedCompletedItrs] = useState([]);
+  const [unverifiedMissingItrs, setUnverifiedMissingItrs] = useState([]);
+  // =======================================================================
 
   const [columnFilters, setColumnFilters] = useState({
     tagNo: [], desc: [], subSystem: [], subSystemDesc: [], 
@@ -179,7 +184,7 @@ export default function ItrMatrix() {
   const [colWidths, setColWidths] = useState({ 
       tagNo: 160, desc: 250, subSys: 120, subSysDesc: 200, chk: 120, 
       loc: 100, subCon: 100, planFin: 100, compDate: 100, 
-      status: 140, action: 110 
+      status: 140, action: 145 
   });
   
   const pdfInputRef = useRef(null);
@@ -208,8 +213,61 @@ export default function ItrMatrix() {
     } catch (err) { console.error("Fetch Data Error:", err); }
   }
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    fetchData(); 
+    const storedNew = JSON.parse(localStorage.getItem('unverifiedNewItrs') || '[]');
+    const storedCompleted = JSON.parse(localStorage.getItem('unverifiedCompletedItrs') || '[]');
+    const storedMissing = JSON.parse(localStorage.getItem('unverifiedMissingItrs') || '[]');
+    setUnverifiedNewItrs(storedNew);
+    setUnverifiedCompletedItrs(storedCompleted);
+    setUnverifiedMissingItrs(storedMissing);
+  }, []);
+  
   useEffect(() => { const storedDate = localStorage.getItem('projectDataDate'); if (storedDate) setDataDate(storedDate); }, [equipList]);
+
+  // ================= CÁC HÀM XỬ LÝ VERIFY QC & MISSING ITR =================
+  const verifySingleItr = (itemKey, type) => {
+      if (type === 'NEW') {
+          const updated = unverifiedNewItrs.filter(k => k !== itemKey);
+          setUnverifiedNewItrs(updated);
+          localStorage.setItem('unverifiedNewItrs', JSON.stringify(updated));
+          if (updated.length === 0 && verificationFilter === 'NEW') setVerificationFilter('ALL');
+      } else {
+          const updated = unverifiedCompletedItrs.filter(k => k !== itemKey);
+          setUnverifiedCompletedItrs(updated);
+          localStorage.setItem('unverifiedCompletedItrs', JSON.stringify(updated));
+          if (updated.length === 0 && verificationFilter === 'JUST_COMPLETED') setVerificationFilter('ALL');
+      }
+  };
+
+  const dropMissingItr = async (item, itemKey) => {
+      if (!window.confirm(`XÁC NHẬN: Bạn muốn XÓA VĨNH VIỄN Tag [${item.tag_no}] khỏi hệ thống vì nó không còn trong file Excel?`)) return;
+      try { 
+          await supabase.from('itr_matrix').delete().eq('id', item.id);
+          const updated = unverifiedMissingItrs.filter(k => k !== itemKey);
+          setUnverifiedMissingItrs(updated);
+          localStorage.setItem('unverifiedMissingItrs', JSON.stringify(updated));
+          if (updated.length === 0 && verificationFilter === 'MISSING') setVerificationFilter('ALL');
+          fetchData(); 
+      } catch(err) { alert("Lỗi khi xóa: " + err.message); }
+  };
+
+  const keepMissingItr = (itemKey) => {
+      const updated = unverifiedMissingItrs.filter(k => k !== itemKey);
+      setUnverifiedMissingItrs(updated);
+      localStorage.setItem('unverifiedMissingItrs', JSON.stringify(updated));
+      if (updated.length === 0 && verificationFilter === 'MISSING') setVerificationFilter('ALL');
+  };
+
+  const verifyAllItrs = () => {
+      if (!window.confirm(`Xác nhận toàn bộ ITR [NEW] và [JUST COMPLETED] đã được đối chiếu xong? (Không bao gồm lỗi MISSING)`)) return;
+      setUnverifiedNewItrs([]);
+      setUnverifiedCompletedItrs([]);
+      localStorage.removeItem('unverifiedNewItrs');
+      localStorage.removeItem('unverifiedCompletedItrs');
+      if (verificationFilter === 'NEW' || verificationFilter === 'JUST_COMPLETED') setVerificationFilter('ALL');
+  };
+  // ==========================================================
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const next7Days = new Date(today); next7Days.setDate(today.getDate() + 7);
@@ -239,8 +297,17 @@ export default function ItrMatrix() {
     status: [...new Set(phaseList.map(i => String(i.itr_status || 'Not Started')))].sort(),
   };
 
-  // ================= BƯỚC 1: TẠO BỘ LỌC CƠ SỞ (SEARCH + COLUMN + DATE) =================
+  // ================= BƯỚC 1: TẠO BỘ LỌC CƠ SỞ (SEARCH + COLUMN + DATE + VERIFICATION) =================
   const baseFilteredList = phaseList.filter(item => {
+    const itemKey = `${getCompareKey(item.tag_no)}_${getCompareKey(item.checksheet_type)}`;
+    const isNewlyAdded = unverifiedNewItrs.includes(itemKey);
+    const isJustCompleted = unverifiedCompletedItrs.includes(itemKey);
+    const isMissing = unverifiedMissingItrs.includes(itemKey);
+
+    if (verificationFilter === 'NEW' && !isNewlyAdded) return false;
+    if (verificationFilter === 'JUST_COMPLETED' && !isJustCompleted) return false;
+    if (verificationFilter === 'MISSING' && !isMissing) return false;
+
     const searchLower = searchTerm.toLowerCase();
     const matchSearch = (String(item.tag_no || '').toLowerCase().includes(searchLower)) || 
                         (String(item.description || '').toLowerCase().includes(searchLower)) || 
@@ -264,7 +331,6 @@ export default function ItrMatrix() {
     return matchSearch && matchPlanMonth && matchCompMonth && matchColTag && matchColDesc && matchColSubSys && matchColSubSysDesc && matchColType && matchColLoc && matchColSubCon && matchColPlanFin && matchColCompDate && matchColStatus;
   });
 
-  // ================= BƯỚC 2: TÍNH KPI DỰA TRÊN BỘ LỌC CƠ SỞ (TẠO TÍNH NĂNG KPI ĐỘNG) =================
   let overdueCount = 0; let upcomingCount = 0; let unverifiedCount = 0; let duplicateCount = 0; 
   let attachedCount = 0; let notAttachedCount = 0; let completedCount = 0;
 
@@ -302,7 +368,6 @@ export default function ItrMatrix() {
     else setStatusFilters(prev => prev.includes(filterKey) ? prev.filter(k => k !== filterKey) : [...prev, filterKey]);
   };
 
-  // ================= BƯỚC 3: TẠO BỘ LỌC CUỐI CÙNG (CỘNG THÊM KPI BUTTONS ĐỂ HIỂN THỊ LÊN BẢNG) =================
   const finalFilteredList = baseFilteredList.filter(item => {
     if (statusFilters.length === 0) return true;
     
@@ -335,7 +400,7 @@ export default function ItrMatrix() {
         try {
             const { error } = await supabase.from('itr_matrix').delete().eq('phase', activePhaseTab);
             if (error) throw error;
-            localStorage.removeItem('projectDataDate'); setDataDate('N/A');
+            localStorage.clear(); setDataDate('N/A');
             await fetchData();
             alert(`✅ Đã xóa thành công toàn bộ dữ liệu của Phase ${activePhaseTab}.`);
         } catch (error) { alert("Lỗi khi xóa: " + error.message); }
@@ -728,6 +793,37 @@ export default function ItrMatrix() {
               </div>
 
               <div className="flex items-center gap-2">
+                  
+                  {/* DẢI BĂNG VERIFICATION MODE - ITR */}
+                  {(unverifiedNewItrs.length > 0 || unverifiedCompletedItrs.length > 0 || unverifiedMissingItrs.length > 0) && (
+                    <div className="flex items-center bg-slate-800 text-white rounded-md p-1 mr-4 shadow-sm animate-in slide-in-from-right duration-300">
+                      <span className="text-[10px] font-black uppercase px-3 text-slate-300 flex items-center gap-1"><ShieldCheck size={12}/> Verify Mode:</span>
+                      
+                      {unverifiedNewItrs.length > 0 && (
+                        <button onClick={() => setVerificationFilter(verificationFilter === 'NEW' ? 'ALL' : 'NEW')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'NEW' ? 'bg-yellow-500 text-yellow-900' : 'hover:bg-slate-700 text-yellow-400'}`}>
+                           {unverifiedNewItrs.length} [NEW]
+                        </button>
+                      )}
+                      
+                      {unverifiedCompletedItrs.length > 0 && (
+                        <button onClick={() => setVerificationFilter(verificationFilter === 'JUST_COMPLETED' ? 'ALL' : 'JUST_COMPLETED')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'JUST_COMPLETED' ? 'bg-emerald-500 text-emerald-900' : 'hover:bg-slate-700 text-emerald-400'}`}>
+                           {unverifiedCompletedItrs.length} [JUST DONE]
+                        </button>
+                      )}
+
+                      {unverifiedMissingItrs.length > 0 && (
+                        <button onClick={() => setVerificationFilter(verificationFilter === 'MISSING' ? 'ALL' : 'MISSING')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'MISSING' ? 'bg-red-500 text-white' : 'hover:bg-slate-700 text-red-400'}`} title="Thiết bị có trong DB nhưng mất tích khỏi Excel">
+                           {unverifiedMissingItrs.length} [MISSING]
+                        </button>
+                      )}
+                      
+                      <div className="w-px bg-slate-600 h-4 mx-2"></div>
+                      <button onClick={verifyAllItrs} className="px-3 py-1 rounded text-xs font-bold hover:bg-emerald-500 hover:text-white transition-colors text-emerald-300 flex items-center gap-1">
+                         <CheckCircle2 size={12}/> Verify All
+                      </button>
+                    </div>
+                  )}
+
                   <button onClick={handleClearData} className="px-3 h-[32px] bg-white hover:bg-red-50 text-red-600 border border-slate-200 hover:border-red-200 font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm" title={`Xóa toàn bộ Tag của Phase ${activePhaseTab}`}>
                       <Trash2 size={14}/> Clear All Tag
                   </button>
@@ -832,13 +928,24 @@ export default function ItrMatrix() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {finalFilteredList.map((item) => {
+                  const itemKey = `${getCompareKey(item.tag_no)}_${getCompareKey(item.checksheet_type)}`;
+                  const isNewlyAdded = unverifiedNewItrs.includes(itemKey);
+                  const isJustCompleted = unverifiedCompletedItrs.includes(itemKey);
+                  const isMissing = unverifiedMissingItrs.includes(itemKey);
+                  
                   const isUnverified = item.checksheet_type === 'UNVERIFIED';
                   const isDup = isDuplicate(item);
+                  
                   let rowBg = "hover:bg-slate-50";
-                  if (isUnverified) rowBg = "bg-yellow-50 hover:bg-yellow-100";
+                  let textStyle = "";
+
+                  // Ưu tiên hiển thị Missing > New > Completed > Unverified > Dup
+                  if (isMissing) { rowBg = "bg-red-50 hover:bg-red-100 shadow-inner opacity-80"; textStyle = "line-through text-red-400"; }
+                  else if (isNewlyAdded) rowBg = "bg-yellow-50 hover:bg-yellow-100 shadow-inner";
+                  else if (isJustCompleted) rowBg = "bg-emerald-50 hover:bg-emerald-100 shadow-inner";
+                  else if (isUnverified) rowBg = "bg-yellow-50 hover:bg-yellow-100";
                   else if (isDup) rowBg = "bg-pink-50 hover:bg-pink-100";
 
-                  // XÁC ĐỊNH TRẠNG THÁI BADGE VÀ ICON FILE
                   const hasPdf = item.itr_records && !!item.itr_records.scanned_pdf;
                   let style = "bg-slate-100 text-slate-600 border-slate-300"; let Icon = CircleDashed; let label = "NOT YET";
                   if (item.itr_status === 'Completed') { style = "bg-emerald-50 text-emerald-700 border-emerald-300"; Icon = CheckCircle2; label = "DONE"; } 
@@ -846,22 +953,25 @@ export default function ItrMatrix() {
 
                   return (
                     <tr key={item.id} className={`transition-colors ${rowBg}`}>
-                      <td className={`p-3 border-r border-slate-300 text-[11px] font-black break-words whitespace-normal align-top sticky left-0 z-20 shadow-[1px_0_0_0_#cbd5e1] ${isUnverified ? 'text-yellow-700 bg-yellow-50' : (isDup ? 'text-pink-700 bg-pink-50' : 'text-slate-800 bg-white')}`}>
-                        {isDup && !isUnverified && <Copy size={12} className="inline mr-1 text-pink-500" title="Duplicate Equipment"/>}
+                      <td className={`p-3 border-r border-slate-300 text-[11px] font-black break-words whitespace-normal align-top sticky left-0 z-20 shadow-[1px_0_0_0_#cbd5e1] ${isMissing ? 'bg-red-50 text-red-500' : isNewlyAdded ? 'bg-yellow-50 text-slate-800' : isJustCompleted ? 'bg-emerald-50 text-slate-800' : isUnverified ? 'text-yellow-700 bg-yellow-50' : isDup ? 'text-pink-700 bg-pink-50' : 'text-slate-800 bg-white'}`}>
+                        {isMissing && <span className="absolute -top-2 -left-2 bg-red-600 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm animate-pulse z-10"><AlertTriangle size={8}/> MISSING</span>}
+                        {isNewlyAdded && !isMissing && <span className="absolute -top-2 -left-2 bg-yellow-500 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm animate-pulse z-10"><Sparkles size={8}/> NEW</span>}
+                        {isJustCompleted && !isMissing && <span className="absolute -top-2 -left-2 bg-emerald-500 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm z-10"><CheckCircle2 size={8}/> COMPLETED</span>}
+                        {isDup && !isUnverified && !isMissing && <Copy size={12} className="inline mr-1 text-pink-500" title="Duplicate Equipment"/>}
                         {String(item.tag_no || '')}
                       </td>
-                      <td className="p-3 border-r border-slate-300 text-[11px] font-bold text-slate-600 break-words whitespace-normal align-top">{String(item.description || '-')}</td>
-                      <td className="p-3 border-r border-slate-300 text-[11px] font-bold text-slate-600 break-words whitespace-normal align-top text-center">{String(item.sub_system_no || '-')}</td>
-                      <td className="p-3 border-r border-slate-300 text-[11px] font-bold text-slate-600 break-words whitespace-normal align-top">{String(item.sub_system_description || '-')}</td>
-                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${isUnverified ? 'text-yellow-600' : 'text-blue-600'}`}>
-                        {isUnverified ? <span className="flex items-center justify-center gap-1"><ShieldAlert size={12}/>UNVERIFIED</span> : String(item.checksheet_type || '-')}
+                      <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top ${textStyle || 'text-slate-600'}`}>{String(item.description || '-')}</td>
+                      <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top text-center ${textStyle || 'text-slate-600'}`}>{String(item.sub_system_no || '-')}</td>
+                      <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top ${textStyle || 'text-slate-600'}`}>{String(item.sub_system_description || '-')}</td>
+                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || (isUnverified ? 'text-yellow-600' : 'text-blue-600')}`}>
+                        {isUnverified && !isMissing ? <span className="flex items-center justify-center gap-1"><ShieldAlert size={12}/>UNVERIFIED</span> : String(item.checksheet_type || '-')}
                       </td>
-                      <td className="p-3 border-r border-slate-300 text-[10px] font-bold text-slate-500 text-center align-top">{String(item.location || '-')}</td>
-                      <td className="p-3 border-r border-slate-300 text-[10px] font-bold text-slate-500 text-center align-top">{String(item.subcontractor || '-')}</td>
-                      <td className="p-3 border-r border-slate-300 text-[10px] font-bold text-slate-600 text-center align-top">{formatToExcelDate(item.plan_finish)}</td>
-                      <td className="p-3 border-r border-slate-300 text-[10px] font-black text-emerald-600 text-center align-top bg-emerald-50/30">{formatToExcelDate(item.complete_date)}</td>
+                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-500'}`}>{String(item.location || '-')}</td>
+                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-500'}`}>{String(item.subcontractor || '-')}</td>
+                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-600'}`}>{formatToExcelDate(item.plan_finish)}</td>
+                      <td className={`p-3 border-r border-slate-300 text-[10px] font-black text-center align-top bg-emerald-50/30 ${textStyle || 'text-emerald-600'}`}>{formatToExcelDate(item.complete_date)}</td>
                       
-                      <td className="p-3 border-r border-slate-300 align-top text-center">
+                      <td className={`p-3 border-r border-slate-300 align-top text-center ${textStyle}`}>
                         <div className="flex items-center justify-center gap-2 w-full">
                           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1 border ${style}`}>
                             <Icon size={12} strokeWidth={3} /> {label}
@@ -876,8 +986,8 @@ export default function ItrMatrix() {
                           ) : (
                             <button 
                               onClick={() => triggerDirectUpload(item)} 
-                              disabled={isUnverified}
-                              className={`p-1.5 rounded-md border transition-colors shrink-0 flex items-center justify-center ${isUnverified ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-500 hover:text-blue-600 border-slate-300 hover:border-blue-300 hover:bg-blue-50'}`}
+                              disabled={isUnverified || isMissing}
+                              className={`p-1.5 rounded-md border transition-colors shrink-0 flex items-center justify-center ${isUnverified || isMissing ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-500 hover:text-blue-600 border-slate-300 hover:border-blue-300 hover:bg-blue-50'}`}
                               title="Attach PDF/Image"
                             >
                               <Paperclip size={14} />
@@ -887,10 +997,32 @@ export default function ItrMatrix() {
                       </td>
 
                       <td className="p-3 align-top text-center">
-                        <div className="flex justify-center gap-2">
-                          <button onClick={() => openItrModal(item)} disabled={isUnverified} className={`px-2 py-1 rounded border transition-colors text-[10px] font-black uppercase shadow-sm ${isUnverified ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border-blue-200'}`}>Exec</button>
-                          <button onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className={`p-1 bg-white rounded border shadow-sm ${isDup ? 'text-pink-500 border-pink-200 hover:bg-pink-100' : 'text-slate-400 hover:text-slate-700 border-slate-200'}`}><Edit size={12}/></button>
-                          <button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 bg-white rounded border shadow-sm text-slate-400 hover:text-red-600 border-slate-200 hover:bg-red-50" title="Delete"><Trash2 size={12}/></button>
+                        <div className="flex justify-center flex-wrap gap-1.5 w-full">
+                          
+                          {/* QUYỀN SINH SÁT CHO LỖI MISSING */}
+                          {isMissing && (
+                             <>
+                               <button onClick={() => dropMissingItr(item, itemKey)} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-red-100 text-red-700 px-2 py-1 rounded border border-red-300 hover:bg-red-600 hover:text-white shadow-sm" title="Xóa vĩnh viễn khỏi Database"><X size={13} strokeWidth={3}/> Drop</button>
+                               <button onClick={() => keepMissingItr(itemKey)} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-slate-100 text-slate-600 px-2 py-1 rounded border border-slate-300 hover:bg-slate-600 hover:text-white shadow-sm" title="Bỏ qua cảnh báo, giữ lại trong Database"><RotateCcw size={13} strokeWidth={2}/> Keep</button>
+                             </>
+                          )}
+
+                          {/* NÚT VERIFY CHO ITR MỚI HOẶC VỪA ĐÓNG */}
+                          {isNewlyAdded && !isMissing && (
+                             <button onClick={() => verifySingleItr(itemKey, 'NEW')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-yellow-50 text-yellow-600 px-2 py-1 rounded border border-yellow-300 hover:bg-yellow-500 hover:text-white shadow-sm"><CheckCircle2 size={13}/> Verify</button>
+                          )}
+                          {isJustCompleted && !isMissing && (
+                             <button onClick={() => verifySingleItr(itemKey, 'COMPLETED')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-emerald-50 text-emerald-600 px-2 py-1 rounded border border-emerald-300 hover:bg-emerald-500 hover:text-white shadow-sm"><CheckCircle2 size={13}/> Verify</button>
+                          )}
+
+                          {/* CÁC NÚT BẤM CŨ */}
+                          {(!isNewlyAdded && !isJustCompleted && !isMissing) && (
+                            <>
+                              <button onClick={() => openItrModal(item)} disabled={isUnverified} className={`px-2 py-1 rounded border transition-colors text-[10px] font-black uppercase shadow-sm ${isUnverified ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border-blue-200'}`}>Exec</button>
+                              <button onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className={`p-1 bg-white rounded border shadow-sm ${isDup ? 'text-pink-500 border-pink-200 hover:bg-pink-100' : 'text-slate-400 hover:text-slate-700 border-slate-200'}`}><Edit size={12}/></button>
+                            </>
+                          )}
+                          {!isMissing && <button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 bg-white rounded border shadow-sm text-slate-400 hover:text-red-600 border-slate-200 hover:bg-red-50" title="Delete"><Trash2 size={12}/></button>}
                         </div>
                       </td>
                     </tr>
