@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { 
-  Search, AlertCircle, CheckCircle2, CheckSquare, RotateCcw, 
+  Search, AlertCircle, AlertTriangle, CheckCircle2, CheckSquare, RotateCcw, 
   Paperclip, FileCheck, X, Loader, Download, Clock, Printer, 
   FileSpreadsheet, Filter, Trash2, Copy, Sparkles, ShieldCheck 
 } from 'lucide-react';
