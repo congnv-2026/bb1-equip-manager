@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 import { 
   Search, AlertCircle, AlertTriangle, CheckCircle2, CheckSquare, RotateCcw, 
   Paperclip, FileCheck, X, Loader, Download, Clock, Printer, 
-  FileSpreadsheet, Filter, Trash2, Copy, Sparkles, ShieldCheck 
+  FileSpreadsheet, Filter, Trash2, Copy, Sparkles, ShieldCheck, Layers
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -22,6 +22,11 @@ const getCompareKey = (str) => {
   if (!str) return '';
   return String(str).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 };
+
+const STANDARD_DISCIPLINES = [
+  'Architecture', 'Electrical', 'HVAC', 'Instrument', 
+  'Mechanical', 'Piping', 'Safety', 'Structure', 'Telecom'
+];
 
 const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) => {
   const [isFocused, setIsFocused] = useState(false);
@@ -44,7 +49,6 @@ const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) 
   );
 };
 
-// ================= GIAO DIỆN FILTER CỘT CHUẨN EXCEL =================
 const ColumnFilter = ({ filterKey, options, activeFilters, setColumnFilters }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTxt, setSearchTxt] = useState('');
@@ -174,16 +178,16 @@ export default function PunchlistMaster() {
   const [punchlists, setPunchlists] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilters, setStatusFilters] = useState([]);
+  
+  const [activeDiscipline, setActiveDiscipline] = useState('ALL'); 
   const [verificationFilter, setVerificationFilter] = useState('ALL'); 
   
-  // ================= STATE DÀNH RIÊNG CHO QC VERIFICATION =================
   const [unverifiedNewPunches, setUnverifiedNewPunches] = useState([]);
   const [unverifiedClosedPunches, setUnverifiedClosedPunches] = useState([]);
   const [unverifiedMissingPunches, setUnverifiedMissingPunches] = useState([]);
-  // =======================================================================
   
   const [columnFilters, setColumnFilters] = useState({
-    punchId: [], tagNo: [], system: [], subSystem: [], defect: [], corrAct: [], category: [], 
+    punchId: [], tagNo: [], system: [], subSystem: [], discipline: [], defect: [], corrAct: [], category: [], 
     assignee: [], raiseBy: [], raiseDate: [], expClear: [], closedDate: [], phase: [], status: []
   });
 
@@ -191,7 +195,7 @@ export default function PunchlistMaster() {
   const [dataDate, setDataDate] = useState(localStorage.getItem('projectDataDate') || 'N/A');
   
   const [colWidths, setColWidths] = useState({ 
-    punchId: 130, tagNo: 140, sys: 80, subSys: 90, desc: 250, corrAct: 180, cat: 60, 
+    punchId: 130, tagNo: 140, sys: 80, subSys: 90, disc: 90, desc: 250, corrAct: 180, cat: 60, 
     assign: 90, raiseBy: 90, raiseDate: 90, expClear: 90, closedDate: 90, phase: 90, 
     status: 90, aging: 65, action: 145 
   });
@@ -212,6 +216,7 @@ export default function PunchlistMaster() {
         
         let plData = allData.map(p => ({
             id: p.id, punchId: p.punch_id, tagNo: p.tag_no, system: p.system_no || 'N/A', subSystem: p.sub_system_no || 'N/A',
+            discipline: p.discipline || 'OTHER',
             phaseOrigin: p.phase_origin || 'N/A', category: p.category || 'B', defect: p.defect_description || '-',
             corrAction: p.corrective_action || '', assignee: p.assignee || '', raiseBy: p.raise_by || '',
             dateRaised: p.date_raised, expClearDate: p.exp_clear_date, closedDate: p.closed_date,
@@ -236,7 +241,6 @@ export default function PunchlistMaster() {
     if (storedDate) setDataDate(storedDate); 
   }, [punchlists]);
 
-  // ================= CÁC HÀM XỬ LÝ VERIFY QC & MISSING =================
   const verifySinglePunch = (punchId, type) => {
       if (type === 'NEW') {
           const updated = unverifiedNewPunches.filter(id => id !== String(punchId));
@@ -278,7 +282,6 @@ export default function PunchlistMaster() {
       localStorage.removeItem('unverifiedClosedPunches');
       if (verificationFilter === 'NEW' || verificationFilter === 'JUST_CLOSED') setVerificationFilter('ALL');
   };
-  // ==========================================================
 
   const handleResizeStart = (e, colKey) => {
     e.preventDefault(); const startX = e.clientX; const startWidth = colWidths[colKey] || 100;
@@ -293,28 +296,32 @@ export default function PunchlistMaster() {
     else setStatusFilters(prev => prev.includes(filterKey) ? prev.filter(k => k !== filterKey) : [...prev, filterKey]);
   };
 
+  // VÁ LỖI TẠI ĐÂY: Dùng toUpperCase() để ép kiểu an toàn tuyệt đối
+  const discPunchlists = activeDiscipline === 'ALL' ? punchlists : punchlists.filter(p => String(p.discipline || 'OTHER').toUpperCase() === String(activeDiscipline).toUpperCase());
+
   const duplicateMap = {};
-  punchlists.forEach(p => { const key = `${getCompareKey(p.tagNo)}___${String(p.defect).trim().toLowerCase()}`; duplicateMap[key] = (duplicateMap[key] || 0) + 1; });
+  discPunchlists.forEach(p => { const key = `${getCompareKey(p.tagNo)}___${String(p.defect).trim().toLowerCase()}`; duplicateMap[key] = (duplicateMap[key] || 0) + 1; });
   const isDuplicate = (p) => duplicateMap[`${getCompareKey(p.tagNo)}___${String(p.defect).trim().toLowerCase()}`] > 1;
 
   const uniqueValues = {
-    punchId: [...new Set(punchlists.map(p => String(p.punchId)))].sort(),
-    tagNo: [...new Set(punchlists.map(p => String(p.tagNo)))].sort(),
-    system: [...new Set(punchlists.map(p => String(p.system)))].sort(),
-    subSystem: [...new Set(punchlists.map(p => String(p.subSystem)))].sort(),
-    defect: [...new Set(punchlists.map(p => String(p.defect)))].sort(),
-    corrAct: [...new Set(punchlists.map(p => String(p.corrAction)))].sort(),
-    category: [...new Set(punchlists.map(p => String(p.category)))].sort(),
-    assignee: [...new Set(punchlists.map(p => String(p.assignee)))].sort(),
-    raiseBy: [...new Set(punchlists.map(p => String(p.raiseBy)))].sort(),
-    raiseDate: [...new Set(punchlists.map(p => p.dateRaised ? formatToExcelDate(p.dateRaised) : ''))].sort(),
-    expClear: [...new Set(punchlists.map(p => p.expClearDate ? formatToExcelDate(p.expClearDate) : ''))].sort(),
-    closedDate: [...new Set(punchlists.map(p => p.closedDate ? formatToExcelDate(p.closedDate) : ''))].sort(),
-    phase: [...new Set(punchlists.map(p => String(p.phaseOrigin)))].sort(),
-    status: [...new Set(punchlists.map(p => String(p.status)))].sort(),
+    punchId: [...new Set(discPunchlists.map(p => String(p.punchId)))].sort(),
+    tagNo: [...new Set(discPunchlists.map(p => String(p.tagNo)))].sort(),
+    system: [...new Set(discPunchlists.map(p => String(p.system)))].sort(),
+    subSystem: [...new Set(discPunchlists.map(p => String(p.subSystem)))].sort(),
+    discipline: [...new Set(discPunchlists.map(p => String(p.discipline)))].sort(),
+    defect: [...new Set(discPunchlists.map(p => String(p.defect)))].sort(),
+    corrAct: [...new Set(discPunchlists.map(p => String(p.corrAction)))].sort(),
+    category: [...new Set(discPunchlists.map(p => String(p.category)))].sort(),
+    assignee: [...new Set(discPunchlists.map(p => String(p.assignee)))].sort(),
+    raiseBy: [...new Set(discPunchlists.map(p => String(p.raiseBy)))].sort(),
+    raiseDate: [...new Set(discPunchlists.map(p => p.dateRaised ? formatToExcelDate(p.dateRaised) : ''))].sort(),
+    expClear: [...new Set(discPunchlists.map(p => p.expClearDate ? formatToExcelDate(p.expClearDate) : ''))].sort(),
+    closedDate: [...new Set(discPunchlists.map(p => p.closedDate ? formatToExcelDate(p.closedDate) : ''))].sort(),
+    phase: [...new Set(discPunchlists.map(p => String(p.phaseOrigin)))].sort(),
+    status: [...new Set(discPunchlists.map(p => String(p.status)))].sort(),
   };
 
-  const baseFilteredList = punchlists.filter(p => {
+  const baseFilteredList = discPunchlists.filter(p => {
     const isNewlyAdded = unverifiedNewPunches.includes(String(p.punchId));
     const isJustClosed = unverifiedClosedPunches.includes(String(p.punchId));
     const isMissing = unverifiedMissingPunches.includes(String(p.punchId));
@@ -335,6 +342,7 @@ export default function PunchlistMaster() {
     const matchTag = columnFilters.tagNo?.length ? columnFilters.tagNo.includes(String(p.tagNo)) : true;
     const matchSys = columnFilters.system?.length ? columnFilters.system.includes(String(p.system)) : true;
     const matchSubSys = columnFilters.subSystem?.length ? columnFilters.subSystem.includes(String(p.subSystem)) : true;
+    const matchDisc = columnFilters.discipline?.length ? columnFilters.discipline.includes(String(p.discipline)) : true;
     const matchDefect = columnFilters.defect?.length ? columnFilters.defect.includes(String(p.defect)) : true;
     const matchCorrAct = columnFilters.corrAct?.length ? columnFilters.corrAct.includes(String(p.corrAction)) : true;
     const matchCat = columnFilters.category?.length ? columnFilters.category.includes(String(p.category)) : true;
@@ -346,7 +354,7 @@ export default function PunchlistMaster() {
     const matchPhase = columnFilters.phase?.length ? columnFilters.phase.includes(String(p.phaseOrigin)) : true;
     const matchStat = columnFilters.status?.length ? columnFilters.status.includes(String(p.status)) : true;
 
-    return matchSearch && matchPunchId && matchTag && matchSys && matchSubSys && matchDefect && matchCorrAct && matchCat && matchAssign && matchRaise && matchRaiseDate && matchExpClear && matchClosedDate && matchPhase && matchStat;
+    return matchSearch && matchPunchId && matchTag && matchSys && matchSubSys && matchDisc && matchDefect && matchCorrAct && matchCat && matchAssign && matchRaise && matchRaiseDate && matchExpClear && matchClosedDate && matchPhase && matchStat;
   });
 
   const stats = {
@@ -441,14 +449,14 @@ export default function PunchlistMaster() {
 
   const exportToExcel = () => {
     const dataToExport = displayList.map(p => ({
-        'Punch ID': p.punchId, 'Tag No': p.tagNo, 'System': p.system, 'Sub-System': p.subSystem,
+        'Punch ID': p.punchId, 'Tag No': p.tagNo, 'System': p.system, 'Sub-System': p.subSystem, 'Discipline': p.discipline,
         'Description': p.defect, 'Corrective Action': p.corrAction, 'Category': p.category, 'Assignee': p.assignee,
         'Raise By': p.raiseBy, 'Raise Date': formatToExcelDate(p.dateRaised), 'Expected Clear Date': p.expClearDate ? formatToExcelDate(p.expClearDate) : '',
         'Closed Date': p.closedDate ? formatToExcelDate(p.closedDate) : '', 'Phase': p.phaseOrigin, 'Status': p.status, 'Aging (Days)': getDays(p.dateRaised)
     }));
     const worksheet = XLSX.utils.json_to_sheet(dataToExport); const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Global_Punchlist_Master");
-    const wscols = [{wch:15}, {wch:15}, {wch:10}, {wch:15}, {wch:40}, {wch:30}, {wch:8}, {wch:15}, {wch:15}, {wch:15}, {wch:15}, {wch:15}, {wch:10}, {wch:10}, {wch:10}];
+    const wscols = [{wch:15}, {wch:15}, {wch:10}, {wch:15}, {wch:12}, {wch:40}, {wch:30}, {wch:8}, {wch:15}, {wch:15}, {wch:15}, {wch:15}, {wch:15}, {wch:10}, {wch:10}, {wch:10}];
     worksheet['!cols'] = wscols; XLSX.writeFile(workbook, `Global_Punchlist_Master.xlsx`);
   };
 
@@ -523,7 +531,6 @@ export default function PunchlistMaster() {
         </div>
       )}
 
-      {/* THANH CÔNG CỤ TOOLBAR CHÍNH */}
       <div className="flex justify-between items-center px-6 pt-4 pb-2 shrink-0 bg-white border-b border-slate-200 z-30 relative">
          <div className="flex gap-2">
             <button onClick={handleClearAllPunches} className="px-3 h-[32px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm" title="Xóa toàn bộ Punchlist trên hệ thống">
@@ -532,7 +539,6 @@ export default function PunchlistMaster() {
          </div>
 
          <div className="flex gap-2">
-            {/* DẢI BĂNG VERIFICATION MODE QC */}
             {(unverifiedNewPunches.length > 0 || unverifiedClosedPunches.length > 0 || unverifiedMissingPunches.length > 0) && (
               <div className="flex items-center bg-slate-800 text-white rounded-md p-1 mr-4 shadow-lg animate-in slide-in-from-right duration-300">
                 <span className="text-[10px] font-black uppercase px-3 text-slate-300 flex items-center gap-1"><ShieldCheck size={12}/> Verify Mode:</span>
@@ -581,9 +587,21 @@ export default function PunchlistMaster() {
                 <div className="mt-auto"><span className="text-[10px] font-bold text-blue-600 block">Data Date: {dataDate}</span></div>
               </div>
           </div>
+
+          <div className="flex gap-2 mb-3 overflow-x-auto pb-1 mt-1">
+             <button onClick={() => setActiveDiscipline('ALL')} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-colors flex items-center gap-1.5 ${activeDiscipline === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'}`}>
+                <Layers size={14}/> ALL DISCIPLINES
+             </button>
+             <div className="w-px bg-slate-200 mx-1 h-6 self-center"></div>
+             {STANDARD_DISCIPLINES.map(d => (
+                 <button key={d} onClick={() => setActiveDiscipline(d)} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-colors ${activeDiscipline === d ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-300 hover:border-blue-400 hover:text-blue-600'}`}>
+                     {d}
+                 </button>
+             ))}
+          </div>
         </div>
 
-        <div className="p-3 px-6 flex justify-between items-center min-h-[90px] overflow-x-auto">
+        <div className="p-3 px-6 flex justify-between items-center min-h-[90px] overflow-x-auto border-t border-slate-200">
           <div className="flex items-center gap-0 shrink-0">
              <div className="pr-5 border-r border-slate-200 flex gap-2">
                  <button onClick={() => handleToggleFilter('TOTAL')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all bg-purple-50 border-purple-200 hover:bg-purple-100 ${statusFilters.length === 0 ? 'ring-2 ring-offset-1 ring-purple-400 shadow-sm' : 'opacity-70 hover:opacity-100'}`}>
@@ -619,6 +637,7 @@ export default function PunchlistMaster() {
                 <th style={{ width: colWidths.tagNo }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">TAG NO <ColumnFilter filterKey="tagNo" options={uniqueValues.tagNo} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="tagNo" /></th>
                 <th style={{ width: colWidths.sys }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">SYSTEM <ColumnFilter filterKey="system" options={uniqueValues.system} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="sys" /></th>
                 <th style={{ width: colWidths.subSys }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">SUB-SYS <ColumnFilter filterKey="subSystem" options={uniqueValues.subSystem} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="subSys" /></th>
+                <th style={{ width: colWidths.disc }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative text-purple-600">DISCIPLINE <ColumnFilter filterKey="discipline" options={uniqueValues.discipline} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="disc" /></th>
                 <th style={{ width: colWidths.desc }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">DESCRIPTION <ColumnFilter filterKey="defect" options={uniqueValues.defect} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="desc" /></th>
                 <th style={{ width: colWidths.corrAct }} className="p-3 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">CORR. ACTION <ColumnFilter filterKey="corrAct" options={uniqueValues.corrAct} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="corrAct" /></th>
                 <th style={{ width: colWidths.cat }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">CAT <ColumnFilter filterKey="category" options={uniqueValues.category} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="cat" /></th>
@@ -660,9 +679,10 @@ export default function PunchlistMaster() {
                          {pl.punchId}
                       </span>
                     </td>
-                    <td className={`p-3 border-r border-slate-300 text-[11px] text-left font-black align-top ${textStyle} ${isDup && !isMissing ? 'text-pink-600' : 'text-blue-600'}`}>{pl.tagNo}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[11px] text-left font-black align-top ${textStyle}${isDup && !isMissing ? 'text-pink-600' : 'text-blue-600'}`}>{pl.tagNo}</td>
                     <td className={`p-3 border-r border-slate-300 text-[11px] font-bold align-top text-center ${textStyle || 'text-slate-600'}`}>{pl.system}</td>
                     <td className={`p-3 border-r border-slate-300 text-[11px] font-bold align-top ${textStyle || 'text-slate-600'}`}>{pl.subSystem}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[11px] font-bold align-top text-center ${textStyle || 'text-purple-600'}`}>{pl.discipline}</td>
                     <td className={`p-3 border-r border-slate-300 text-[11px] text-left whitespace-normal break-words align-top ${textStyle || (isDup ? 'font-black text-pink-700' : 'font-bold text-slate-700')}`}>
                       {isDup && !isMissing && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-pink-100 border border-pink-300 text-[9px] text-pink-700 font-black mr-2 tracking-widest"><Copy size={10}/>DUPLICATED</span>}
                       {pl.defect}
@@ -680,7 +700,6 @@ export default function PunchlistMaster() {
                     <td className="p-3 align-top text-center border-l border-slate-300">
                       <div className="flex justify-center items-center gap-1.5 flex-wrap">
                         
-                        {/* QUYỀN SINH SÁT CHO LỖI MISSING */}
                         {isMissing && (
                            <>
                              <button onClick={() => dropMissingPunch(pl)} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-red-100 text-red-700 px-2 py-1.5 rounded border border-red-300 hover:bg-red-600 hover:text-white shadow-sm" title="Xóa vĩnh viễn khỏi Database"><X size={13} strokeWidth={3}/> Drop</button>
@@ -688,7 +707,6 @@ export default function PunchlistMaster() {
                            </>
                         )}
 
-                        {/* NÚT VERIFY TỪNG DÒNG (CHỈ HIỆN KHI ĐANG BỊ HIGHLIGHT CHỜ VERIFY) */}
                         {isNewlyAdded && !isMissing && (
                            <button onClick={() => verifySinglePunch(pl.punchId, 'NEW')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-yellow-50 text-yellow-600 px-2 py-1.5 rounded border border-yellow-300 hover:bg-yellow-500 hover:text-white shadow-sm" title="Xác nhận lỗi này đã dò xong"><CheckCircle2 size={13} className="inline mr-0.5"/> Verify</button>
                         )}
@@ -696,7 +714,6 @@ export default function PunchlistMaster() {
                            <button onClick={() => verifySinglePunch(pl.punchId, 'CLOSED')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-emerald-50 text-emerald-600 px-2 py-1.5 rounded border border-emerald-300 hover:bg-emerald-500 hover:text-white shadow-sm" title="Xác nhận lỗi này đã dò xong"><CheckCircle2 size={13} className="inline mr-0.5"/> Verify</button>
                         )}
 
-                        {/* CÁC NÚT BẤM CŨ CỦA BẠN ĐƯỢC GIỮ NGUYÊN */}
                         {(!isNewlyAdded && !isJustClosed && !isMissing) && (
                           pl.status === 'OPEN' ? (
                             <button onClick={() => setCloseModal({ isOpen: true, item: pl, note: '', file: null, uploading: false })} className={`flex items-center gap-1 text-[10px] font-black transition-colors bg-white px-2.5 py-1.5 rounded border shadow-sm ${isDup ? 'text-pink-600 border-pink-300 hover:bg-pink-100 hover:text-pink-800' : 'text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-800'}`}><CheckSquare size={13} className="inline mr-0.5"/> Close</button>
@@ -713,13 +730,12 @@ export default function PunchlistMaster() {
                   </tr>
                 );
               })}
-              {displayList.length === 0 && (<tr><td colSpan="16" className="p-16 text-center text-slate-400 font-bold text-[11px]">No punchlist data matches the filters.</td></tr>)}
+              {displayList.length === 0 && (<tr><td colSpan="17" className="p-16 text-center text-slate-400 font-bold text-[11px]">No punchlist data matches the filters.</td></tr>)}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ================= BẢN IN MASTER LIST ================= */}
       <div id="printable-punchlist" className="hidden">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #cbd5e1', paddingBottom: '8px', marginBottom: '12px' }}>
           <div style={{ fontWeight: '900', fontSize: '12px', textAlign: 'left', width: '33%', color: '#334155' }}>MCDERMOTT | PTSC</div>
@@ -737,17 +753,18 @@ export default function PunchlistMaster() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '9%' }}>PUNCH ID</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '8%' }}>PUNCH ID</th>
               <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '9%' }}>TAG NO</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '6%' }}>PHASE</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '5%' }}>PHASE</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '6%' }}>DISC</th>
               <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '8%' }}>SYS</th>
               <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '8%' }}>SUB</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '5%' }}>CAT</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '20%' }}>DESCRIPTION</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '7%' }}>ASSIGNEE</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '7%' }}>RAISE BY</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '4%' }}>CAT</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '15%' }}>DESCRIPTION</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '6%' }}>ASSIGNEE</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '6%' }}>RAISE BY</th>
               <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '7%' }}>RAISE DATE</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '10%' }}>STATUS</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#f8fafc', textAlign: 'center', width: '8%' }}>STATUS</th>
             </tr>
           </thead>
           <tbody>
@@ -765,6 +782,7 @@ export default function PunchlistMaster() {
                   <td style={{ border: '1px solid #cbd5e1', padding: '4px', fontWeight: 'bold', textAlign: 'center', backgroundColor: '#f1f5f9' }}>{pl.punchId}</td>
                   <td style={{ border: '1px solid #cbd5e1', padding: '4px', textAlign: 'left', fontWeight: 'bold', color: '#2563eb' }}>{pl.tagNo}</td>
                   <td style={{ border: '1px solid #cbd5e1', padding: '4px', textAlign: 'center', fontWeight: 'bold' }}>{pl.phaseOrigin}</td>
+                  <td style={{ border: '1px solid #cbd5e1', padding: '4px', textAlign: 'center', fontWeight: 'bold' }}>{pl.discipline}</td>
                   <td style={{ border: '1px solid #cbd5e1', padding: '4px', textAlign: 'center', fontWeight: 'bold' }}>{pl.system}</td>
                   <td style={{ border: '1px solid #cbd5e1', padding: '4px', textAlign: 'center', fontWeight: 'bold' }}>{pl.subSystem}</td>
                   <td style={{ border: '1px solid #cbd5e1', padding: '4px', textAlign: 'center' }}><div style={{ backgroundColor: catBg, color: catColor, border: `1px solid ${catBorder}`, padding: '2px', borderRadius: '4px', fontWeight: '900', display: 'inline-block' }}>{pl.category}</div></td>

@@ -3,7 +3,7 @@ import {
   Search, RotateCcw, X, Edit, Trash2, FileSpreadsheet, Printer, 
   RefreshCw, Hammer, Zap, CheckCircle2, CircleDashed, FileText, 
   Download, AlertTriangle, Clock, ShieldAlert, Copy, Filter,
-  Paperclip, Loader, FileCheck, Sparkles, ShieldCheck 
+  Paperclip, Loader, FileCheck, Sparkles, ShieldCheck, Layers
 } from 'lucide-react';
 import { supabase } from '../supabase';
 import * as XLSX from 'xlsx';
@@ -34,6 +34,11 @@ const getMonthYear = (dateStr) => {
     return `${m}/${y}`;
 };
 
+const STANDARD_DISCIPLINES = [
+  'Architecture', 'Electrical', 'HVAC', 'Instrument', 
+  'Mechanical', 'Piping', 'Safety', 'Structure', 'Telecom'
+];
+
 const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) => {
   const [isFocused, setIsFocused] = useState(false);
   let displayValue = '';
@@ -55,7 +60,6 @@ const CustomDateInput = ({ value, onChange, disabled, className, placeholder }) 
   );
 };
 
-// ================= GIAO DIỆN FILTER CỘT CHUẨN EXCEL =================
 const ColumnFilter = ({ filterKey, options, activeFilters, setColumnFilters }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTxt, setSearchTxt] = useState('');
@@ -150,6 +154,7 @@ export default function ItrMatrix() {
   const [templates, setTemplates] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   
+  const [activeDiscipline, setActiveDiscipline] = useState('ALL'); 
   const [activePhaseTab, setActivePhaseTab] = useState('CC'); 
   const [statusFilters, setStatusFilters] = useState([]);
   const [verificationFilter, setVerificationFilter] = useState('ALL'); 
@@ -161,7 +166,7 @@ export default function ItrMatrix() {
   // =======================================================================
 
   const [columnFilters, setColumnFilters] = useState({
-    tagNo: [], desc: [], subSystem: [], subSystemDesc: [], 
+    tagNo: [], desc: [], subSystem: [], subSystemDesc: [], discipline: [],
     type: [], location: [], subContractor: [], planFinish: [], compDate: [], status: []
   });
 
@@ -182,7 +187,7 @@ export default function ItrMatrix() {
   const [dataDate, setDataDate] = useState(localStorage.getItem('projectDataDate') || 'N/A');
 
   const [colWidths, setColWidths] = useState({ 
-      tagNo: 160, desc: 250, subSys: 120, subSysDesc: 200, chk: 120, 
+      tagNo: 160, desc: 250, subSys: 120, subSysDesc: 200, disc: 100, chk: 120, 
       loc: 100, subCon: 100, planFin: 100, compDate: 100, 
       status: 140, action: 145 
   });
@@ -225,7 +230,6 @@ export default function ItrMatrix() {
   
   useEffect(() => { const storedDate = localStorage.getItem('projectDataDate'); if (storedDate) setDataDate(storedDate); }, [equipList]);
 
-  // ================= CÁC HÀM XỬ LÝ VERIFY QC & MISSING ITR =================
   const verifySingleItr = (itemKey, type) => {
       if (type === 'NEW') {
           const updated = unverifiedNewItrs.filter(k => k !== itemKey);
@@ -267,12 +271,13 @@ export default function ItrMatrix() {
       localStorage.removeItem('unverifiedCompletedItrs');
       if (verificationFilter === 'NEW' || verificationFilter === 'JUST_COMPLETED') setVerificationFilter('ALL');
   };
-  // ==========================================================
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const next7Days = new Date(today); next7Days.setDate(today.getDate() + 7);
 
-  const phaseList = equipList.filter(item => item.phase === activePhaseTab);
+  // VÁ LỖI TẠI ĐÂY: Dùng toUpperCase() để ép kiểu an toàn tuyệt đối
+  const discEquipList = activeDiscipline === 'ALL' ? equipList : equipList.filter(i => String(i.discipline || 'OTHER').toUpperCase() === String(activeDiscipline).toUpperCase());
+  const phaseList = discEquipList.filter(item => item.phase === activePhaseTab);
 
   const duplicateMap = {};
   phaseList.forEach(item => {
@@ -289,6 +294,7 @@ export default function ItrMatrix() {
     desc: [...new Set(phaseList.map(i => String(i.description || '')))].sort(),
     subSystem: [...new Set(phaseList.map(i => String(i.sub_system_no || '')))].sort(),
     subSystemDesc: [...new Set(phaseList.map(i => String(i.sub_system_description || '')))].sort(),
+    discipline: [...new Set(phaseList.map(i => String(i.discipline || '')))].sort(),
     type: [...new Set(phaseList.map(i => String(i.checksheet_type || '')))].sort(),
     location: [...new Set(phaseList.map(i => String(i.location || '')))].sort(),
     subContractor: [...new Set(phaseList.map(i => String(i.subcontractor || '')))].sort(),
@@ -297,7 +303,6 @@ export default function ItrMatrix() {
     status: [...new Set(phaseList.map(i => String(i.itr_status || 'Not Started')))].sort(),
   };
 
-  // ================= BƯỚC 1: TẠO BỘ LỌC CƠ SỞ (SEARCH + COLUMN + DATE + VERIFICATION) =================
   const baseFilteredList = phaseList.filter(item => {
     const itemKey = `${getCompareKey(item.tag_no)}_${getCompareKey(item.checksheet_type)}`;
     const isNewlyAdded = unverifiedNewItrs.includes(itemKey);
@@ -321,6 +326,7 @@ export default function ItrMatrix() {
     const matchColDesc = columnFilters.desc?.length ? columnFilters.desc.includes(String(item.description || '')) : true;
     const matchColSubSys = columnFilters.subSystem?.length ? columnFilters.subSystem.includes(String(item.sub_system_no || '')) : true;
     const matchColSubSysDesc = columnFilters.subSystemDesc?.length ? columnFilters.subSystemDesc.includes(String(item.sub_system_description || '')) : true;
+    const matchColDisc = columnFilters.discipline?.length ? columnFilters.discipline.includes(String(item.discipline || '')) : true;
     const matchColType = columnFilters.type?.length ? columnFilters.type.includes(String(item.checksheet_type || '')) : true;
     const matchColLoc = columnFilters.location?.length ? columnFilters.location.includes(String(item.location || '')) : true;
     const matchColSubCon = columnFilters.subContractor?.length ? columnFilters.subContractor.includes(String(item.subcontractor || '')) : true;
@@ -328,7 +334,7 @@ export default function ItrMatrix() {
     const matchColCompDate = columnFilters.compDate?.length ? columnFilters.compDate.includes(item.complete_date ? formatToExcelDate(item.complete_date) : '') : true;
     const matchColStatus = columnFilters.status?.length ? columnFilters.status.includes(String(item.itr_status || 'Not Started')) : true;
 
-    return matchSearch && matchPlanMonth && matchCompMonth && matchColTag && matchColDesc && matchColSubSys && matchColSubSysDesc && matchColType && matchColLoc && matchColSubCon && matchColPlanFin && matchColCompDate && matchColStatus;
+    return matchSearch && matchPlanMonth && matchCompMonth && matchColTag && matchColDesc && matchColSubSys && matchColSubSysDesc && matchColDisc && matchColType && matchColLoc && matchColSubCon && matchColPlanFin && matchColCompDate && matchColStatus;
   });
 
   let overdueCount = 0; let upcomingCount = 0; let unverifiedCount = 0; let duplicateCount = 0; 
@@ -633,405 +639,288 @@ export default function ItrMatrix() {
         </div>
       )}
 
-      {/* ================= KHU VỰC ẨN BẢN IN EXECUTION ================= */}
-      {activeItr && (
-        <div id="printable-itr" className="hidden">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid black', paddingBottom: '8px', marginBottom: '12px' }}>
-            <div style={{ fontWeight: 'bold', fontSize: '12px', textAlign: 'left' }}>MCDERMOTT<br/>PTSC</div>
-            <div style={{ textAlign: 'center', fontWeight: '900', fontSize: '16px', textTransform: 'uppercase' }}>VIETNAM BLOCK B GAS PROJECT<br/><span style={{ fontSize: '10px' }}>INSTALLATION INSPECTION & TEST RECORD</span></div>
-            <div style={{ fontWeight: 'bold', fontSize: '12px', textAlign: 'right' }}>PETROVIETNAM<br/>PQPOC</div>
-          </div>
-          <div style={{ display: 'flex', border: '1px solid black', marginBottom: '12px', fontWeight: 'bold', fontSize: '10px', textAlign: 'center' }}>
-            <div style={{ width: '50%', padding: '6px', borderRight: '1px solid black', textTransform: 'uppercase', backgroundColor: '#f1f5f9' }}>{templates[activeItr.checksheet_type]?.description || 'MECHANICAL EQUIPMENT'}</div>
-            <div style={{ width: '16.66%', padding: '6px', borderRight: '1px solid black' }}>{activeItr.checksheet_type}</div>
-            <div style={{ width: '16.66%', padding: '6px', borderRight: '1px solid black' }}>Sheet 1 of 1</div>
-            <div style={{ width: '16.66%', padding: '6px' }}>Rev 00</div>
-          </div>
+      <div className="flex justify-between items-center px-6 pt-4 pb-2 shrink-0 bg-white border-b border-slate-200 z-30 relative">
+         <div className="flex gap-2">
+            <button onClick={handleClearData} className="px-3 h-[32px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm" title={`Xóa toàn bộ Tag của Phase ${activePhaseTab}`}>
+               <Trash2 size={14}/> Clear All Tag
+            </button>
+         </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', marginBottom: '12px', fontSize: '10px' }}>
-            <tbody>
-              <tr><td style={{ border: '1px solid black', padding: '6px', backgroundColor: '#f1f5f9', fontWeight: 'bold', textTransform: 'uppercase' }} colSpan="4">Information</td></tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold', width: '25%' }}>Tag number</td><td style={{ border: '1px solid black', padding: '6px', width: '25%', fontWeight: '900' }}>{activeItr.tag_no}</td>
-                <td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold', width: '25%' }}>Description</td><td style={{ border: '1px solid black', padding: '6px', width: '25%' }}>{activeItr.description}</td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Sub System</td><td style={{ border: '1px solid black', padding: '6px', fontWeight: '900' }}>{activeItr.sub_system_no}</td>
-                <td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>P&ID No.</td><td style={{ border: '1px solid black', padding: '6px' }}>{activeItr.pid_no}</td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Deck/location</td><td style={{ border: '1px solid black', padding: '6px' }}>{activeItr.location}</td>
-                <td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Serial No.</td><td style={{ border: '1px solid black', padding: '6px' }}>{activeItr.serial_no}</td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Sub-Contractor</td><td style={{ border: '1px solid black', padding: '6px' }}>{activeItr.subcontractor}</td>
-                <td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Manufacturer</td><td style={{ border: '1px solid black', padding: '6px' }}>{activeItr.manufacturer}</td>
-              </tr>
-            </tbody>
-          </table>
+         <div className="flex gap-2">
+            {/* DẢI BĂNG VERIFICATION MODE - ITR */}
+            {(unverifiedNewItrs.length > 0 || unverifiedCompletedItrs.length > 0 || unverifiedMissingItrs.length > 0) && (
+              <div className="flex items-center bg-slate-800 text-white rounded-md p-1 mr-4 shadow-sm animate-in slide-in-from-right duration-300">
+                <span className="text-[10px] font-black uppercase px-3 text-slate-300 flex items-center gap-1"><ShieldCheck size={12}/> Verify Mode:</span>
+                
+                {unverifiedNewItrs.length > 0 && (
+                  <button onClick={() => setVerificationFilter(verificationFilter === 'NEW' ? 'ALL' : 'NEW')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'NEW' ? 'bg-yellow-500 text-yellow-900' : 'hover:bg-slate-700 text-yellow-400'}`}>
+                     {unverifiedNewItrs.length} [NEW]
+                  </button>
+                )}
+                
+                {unverifiedCompletedItrs.length > 0 && (
+                  <button onClick={() => setVerificationFilter(verificationFilter === 'JUST_COMPLETED' ? 'ALL' : 'JUST_COMPLETED')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'JUST_COMPLETED' ? 'bg-emerald-500 text-emerald-900' : 'hover:bg-slate-700 text-emerald-400'}`}>
+                     {unverifiedCompletedItrs.length} [JUST DONE]
+                  </button>
+                )}
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', marginBottom: '12px', fontSize: '10px' }}>
-            <thead style={{ backgroundColor: '#f1f5f9' }}>
-              <tr>
-                <th style={{ border: '1px solid black', padding: '6px', width: '8%', textAlign: 'center' }}>No.</th>
-                <th style={{ border: '1px solid black', padding: '6px', width: '62%', textAlign: 'center' }}>Description</th>
-                <th style={{ border: '1px solid black', padding: '6px', width: '10%', textAlign: 'center' }}>OK</th>
-                <th style={{ border: '1px solid black', padding: '6px', width: '10%', textAlign: 'center' }}>N/A</th>
-                <th style={{ border: '1px solid black', padding: '6px', width: '10%', textAlign: 'center' }}>P/L</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold', backgroundColor: '#f8fafc' }} colSpan="5">1. Inspection Checklist</td></tr>
-              {(templates[activeItr.checksheet_type]?.questions || []).map(q => (
-                <tr key={q.id}>
-                  <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{q.id}</td>
-                  <td style={{ border: '1px solid black', padding: '6px', textAlign: 'justify' }}>{q.text}</td>
-                  <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: '900', color: '#059669' }}>{itrData[q.id]?.status === 'OK' ? '✓' : ''}</td>
-                  <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: '900', color: '#64748b' }}>{itrData[q.id]?.status === 'N/A' ? 'N/A' : ''}</td>
-                  <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: '900', color: '#dc2626' }}>{itrData[q.id]?.status === 'P/L' ? 'P/L' : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                {unverifiedMissingItrs.length > 0 && (
+                  <button onClick={() => setVerificationFilter(verificationFilter === 'MISSING' ? 'ALL' : 'MISSING')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'MISSING' ? 'bg-red-500 text-white' : 'hover:bg-slate-700 text-red-400'}`} title="Thiết bị có trong DB nhưng mất tích khỏi Excel">
+                     {unverifiedMissingItrs.length} [MISSING]
+                  </button>
+                )}
+                
+                <div className="w-px bg-slate-600 h-4 mx-2"></div>
+                <button onClick={verifyAllItrs} className="px-3 py-1 rounded text-xs font-bold hover:bg-emerald-500 hover:text-white transition-colors text-emerald-300 flex items-center gap-1">
+                   <CheckCircle2 size={12}/> Verify All
+                </button>
+              </div>
+            )}
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', textAlign: 'center', marginTop: 'auto', fontSize: '10px' }}>
-            <thead style={{ backgroundColor: '#f1f5f9' }}>
-              <tr>
-                <th style={{ border: '1px solid black', padding: '6px' }}></th>
-                <th style={{ border: '1px solid black', padding: '6px', width: '25%' }}>Completed by</th>
-                <th style={{ border: '1px solid black', padding: '6px', width: '25%' }}>Verified / Approved by</th>
-                <th style={{ border: '1px solid black', padding: '6px', width: '25%' }}>Witnessed / Reviewed by</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold', textAlign: 'left' }}>Company</td><td style={{ border: '1px solid black', padding: '6px' }}></td><td style={{ border: '1px solid black', padding: '6px' }}></td><td style={{ border: '1px solid black', padding: '6px' }}></td></tr>
-              <tr><td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold', textAlign: 'left' }}>Name</td><td style={{ border: '1px solid black', padding: '6px' }}></td><td style={{ border: '1px solid black', padding: '6px' }}></td><td style={{ border: '1px solid black', padding: '6px' }}></td></tr>
-              <tr><td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold', textAlign: 'left', height: '4rem', verticalAlign: 'top' }}>Signature</td><td style={{ border: '1px solid black', padding: '6px' }}></td><td style={{ border: '1px solid black', padding: '6px' }}></td><td style={{ border: '1px solid black', padding: '6px' }}></td></tr>
-              <tr><td style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold', textAlign: 'left' }}>Date</td><td style={{ border: '1px solid black', padding: '6px' }}></td><td style={{ border: '1px solid black', padding: '6px' }}></td><td style={{ border: '1px solid black', padding: '6px' }}></td></tr>
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* ================= KHU VỰC ẨN BẢN IN MASTER LIST A4 ================= */}
-      <div id="printable-master-list" className="hidden">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #cbd5e1', paddingBottom: '8px', marginBottom: '12px' }}>
-          <div style={{ fontWeight: '900', fontSize: '12px', textAlign: 'left', width: '33%', color: '#334155' }}>MCDERMOTT | PTSC</div>
-          <div style={{ textAlign: 'center', width: '33%' }}>
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>VIETNAM BLOCK B GAS PROJECT</h2>
-            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginTop: '4px', textTransform: 'uppercase' }}>ITR INSPECTION RECORDS (PHASE {activePhaseTab})</div>
-          </div>
-          <div style={{ textAlign: 'right', width: '33%' }}>
-            <div style={{ fontWeight: '900', fontSize: '12px', color: '#334155' }}>PETROVIETNAM | PQPOC</div>
-            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#2563eb', marginTop: '4px' }}>Data Date: {dataDate}</div>
-            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>Printed: {formatToExcelDate(new Date().toISOString())}</div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', fontWeight: 'bold', fontSize: '12px', backgroundColor: '#f1f5f9', padding: '10px', border: '1px solid #cbd5e1' }}>
-          <span style={{ color: '#7e22ce' }}>TOTAL: {stats.total}</span>
-          <span style={{ color: '#64748b' }}>NOT STARTED: {stats.notStarted}</span>
-          <span style={{ color: '#059669' }}>DONE: {stats.completed}</span>
-          <span style={{ color: '#2563eb' }}>(ATTACHED: {stats.attached}</span>
-          <span style={{ color: '#dc2626' }}>/ NOT ATTACHED: {stats.notAttached})</span>
-        </div>
-
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', tableLayout: 'fixed' }}>
-          <thead>
-            <tr>
-              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '15%' }}>Tag No</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '25%' }}>Description</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '10%' }}>Sub-System</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '20%' }}>Sub-Sys Desc</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '10%' }}>Checksheet</th>
-              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '10%' }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {finalFilteredList.map(item => (
-              <tr key={`print-list-${item.id}`}>
-                <td style={{ border: '1px solid #cbd5e1', padding: '6px', fontWeight: 'bold', textAlign: 'left' }}>{item.tag_no}</td>
-                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'left' }}>{item.description || '-'}</td>
-                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'center' }}>{item.sub_system_no || '-'}</td>
-                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'left' }}>{item.sub_system_description || '-'}</td>
-                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'center', color: '#2563eb', fontWeight: 'bold' }}>{item.checksheet_type || '-'}</td>
-                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'center', fontWeight: 'bold', color: item.itr_status === 'Completed' ? '#059669' : item.itr_status === 'In Progress' ? '#2563eb' : '#64748b' }}>
-                    {item.itr_status === 'Completed' ? 'DONE' : item.itr_status === 'In Progress' ? 'IN PROG' : 'NOT YET'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            <button onClick={fetchData} className="p-1.5 border border-slate-200 rounded-md shadow-sm hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer flex items-center justify-center"><RotateCcw size={16} strokeWidth={2.5} /></button>
+            <button onClick={handlePrintListPDF} className="group bg-white border border-slate-200 hover:border-slate-300 shadow-sm rounded-md px-3.5 py-1.5 flex items-center gap-2 transition-colors cursor-pointer text-slate-700 hover:bg-slate-50"><Printer size={15} strokeWidth={2.5} className="text-slate-500 group-hover:text-slate-700" /><span className="font-bold text-[13px]">PDF</span></button>
+            <button onClick={exportToExcel} className="group bg-white border border-slate-200 hover:border-slate-300 shadow-sm rounded-md px-3.5 py-1.5 flex items-center gap-2 transition-colors cursor-pointer text-slate-700 hover:bg-slate-50"><Download size={15} strokeWidth={2.5} className="text-slate-500 group-hover:text-slate-700" /><span className="font-bold text-[13px]">Excel</span></button>
+         </div>
       </div>
 
-      {/* ================= GIAO DIỆN CHÍNH (UI) ================= */}
-      <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
-        
-        {/* THANH HEADER TRÊN CÙNG */}
-        <div className="flex-none bg-white z-20 shadow-sm border-b border-slate-200">
-          <div className="px-6 pt-4 pb-0">
-            <div className="flex justify-between items-stretch border-b-2 border-slate-300 pb-2 mb-3 shrink-0">
-                <div className="w-1/4 flex flex-col justify-end text-left pb-0.5"><span className="font-black text-[12px] text-slate-700 tracking-wider uppercase">MCDERMOTT | PTSC</span></div>
-                <div className="w-1/2 flex flex-col justify-between items-center text-center">
-                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest m-0 leading-none">VIETNAM BLOCK B GAS PROJECT</h2>
-                  <span className="text-[10.5px] text-slate-500 font-bold uppercase tracking-wider mt-1.5">ITR INSPECTION MANAGEMENT ({activePhaseTab === 'CC' ? 'PHASE CC - ITR-A' : 'PHASE PC - ITR-B'})</span>
-                </div>
-                <div className="w-1/4 flex flex-col justify-between text-right pb-0.5">
-                  <span className="font-black text-[12px] text-slate-700 tracking-wider uppercase block">PETROVIETNAM | PQPOC</span>
-                  <div className="mt-auto"><span className="text-[10px] font-bold text-blue-600 block">Data Date: {dataDate}</span></div>
-                </div>
-            </div>
-
-            <div className="flex items-center justify-between bg-white pb-3">
-              <div className="flex gap-2">
-                  <button onClick={() => { setActivePhaseTab('CC'); setStatusFilters([]); }} className={`flex items-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 rounded-t-lg ${activePhaseTab === 'CC' ? 'border-blue-600 text-blue-700 bg-blue-50/50' : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
-                      <Hammer size={16} className={activePhaseTab === 'CC' ? 'text-blue-600' : 'opacity-50'} /> Phase CC (ITR-A)
-                  </button>
-                  <button onClick={() => { setActivePhaseTab('PC'); setStatusFilters([]); }} className={`flex items-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 rounded-t-lg ${activePhaseTab === 'PC' ? 'border-amber-500 text-amber-700 bg-amber-50/50' : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
-                      <Zap size={16} className={activePhaseTab === 'PC' ? 'text-amber-500' : 'opacity-50'} /> Phase PC (ITR-B)
-                  </button>
+      <div className="flex-none bg-white border-b border-slate-200 z-20">
+        <div className="px-6 pt-4 pb-0">
+          <div className="flex justify-between items-stretch border-b-2 border-slate-300 pb-2 mb-3 shrink-0">
+              <div className="w-1/4 flex flex-col justify-end text-left pb-0.5"><span className="font-black text-[12px] text-slate-700 tracking-wider uppercase">MCDERMOTT | PTSC</span></div>
+              <div className="w-1/2 flex flex-col justify-between items-center text-center">
+                <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest m-0 leading-none">VIETNAM BLOCK B GAS PROJECT</h2>
+                <span className="text-[10.5px] text-slate-500 font-bold uppercase tracking-wider mt-1.5">ITR INSPECTION MANAGEMENT ({activePhaseTab === 'CC' ? 'PHASE CC - ITR-A' : 'PHASE PC - ITR-B'})</span>
               </div>
-
-              <div className="flex items-center gap-2">
-                  
-                  {/* DẢI BĂNG VERIFICATION MODE - ITR */}
-                  {(unverifiedNewItrs.length > 0 || unverifiedCompletedItrs.length > 0 || unverifiedMissingItrs.length > 0) && (
-                    <div className="flex items-center bg-slate-800 text-white rounded-md p-1 mr-4 shadow-sm animate-in slide-in-from-right duration-300">
-                      <span className="text-[10px] font-black uppercase px-3 text-slate-300 flex items-center gap-1"><ShieldCheck size={12}/> Verify Mode:</span>
-                      
-                      {unverifiedNewItrs.length > 0 && (
-                        <button onClick={() => setVerificationFilter(verificationFilter === 'NEW' ? 'ALL' : 'NEW')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'NEW' ? 'bg-yellow-500 text-yellow-900' : 'hover:bg-slate-700 text-yellow-400'}`}>
-                           {unverifiedNewItrs.length} [NEW]
-                        </button>
-                      )}
-                      
-                      {unverifiedCompletedItrs.length > 0 && (
-                        <button onClick={() => setVerificationFilter(verificationFilter === 'JUST_COMPLETED' ? 'ALL' : 'JUST_COMPLETED')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'JUST_COMPLETED' ? 'bg-emerald-500 text-emerald-900' : 'hover:bg-slate-700 text-emerald-400'}`}>
-                           {unverifiedCompletedItrs.length} [JUST DONE]
-                        </button>
-                      )}
-
-                      {unverifiedMissingItrs.length > 0 && (
-                        <button onClick={() => setVerificationFilter(verificationFilter === 'MISSING' ? 'ALL' : 'MISSING')} className={`px-3 py-1 rounded text-xs font-bold transition-colors flex items-center gap-1 ${verificationFilter === 'MISSING' ? 'bg-red-500 text-white' : 'hover:bg-slate-700 text-red-400'}`} title="Thiết bị có trong DB nhưng mất tích khỏi Excel">
-                           {unverifiedMissingItrs.length} [MISSING]
-                        </button>
-                      )}
-                      
-                      <div className="w-px bg-slate-600 h-4 mx-2"></div>
-                      <button onClick={verifyAllItrs} className="px-3 py-1 rounded text-xs font-bold hover:bg-emerald-500 hover:text-white transition-colors text-emerald-300 flex items-center gap-1">
-                         <CheckCircle2 size={12}/> Verify All
-                      </button>
-                    </div>
-                  )}
-
-                  <button onClick={handleClearData} className="px-3 h-[32px] bg-white hover:bg-red-50 text-red-600 border border-slate-200 hover:border-red-200 font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm" title={`Xóa toàn bộ Tag của Phase ${activePhaseTab}`}>
-                      <Trash2 size={14}/> Clear All Tag
-                  </button>
-                  <div className="w-px bg-slate-200 mx-1"></div>
-                  <button onClick={fetchData} className="p-1.5 border border-slate-200 rounded-md shadow-sm hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer flex items-center justify-center"><RotateCcw size={16} strokeWidth={2.5} /></button>
-                  <button onClick={handlePrintListPDF} className="group bg-white border border-slate-200 hover:border-slate-300 shadow-sm rounded-md px-3.5 py-1.5 flex items-center gap-2 transition-colors cursor-pointer text-slate-700 hover:bg-slate-50"><Printer size={15} strokeWidth={2.5} className="text-slate-500 group-hover:text-slate-700" /><span className="font-bold text-[13px]">PDF</span></button>
-                  <button onClick={exportToExcel} className="group bg-white border border-slate-200 hover:border-slate-300 shadow-sm rounded-md px-3.5 py-1.5 flex items-center gap-2 transition-colors cursor-pointer text-slate-700 hover:bg-slate-50"><Download size={15} strokeWidth={2.5} className="text-slate-500 group-hover:text-slate-700" /><span className="font-bold text-[13px]">Excel</span></button>
+              <div className="w-1/4 flex flex-col justify-between text-right pb-0.5">
+                <span className="font-black text-[12px] text-slate-700 tracking-wider uppercase block">PETROVIETNAM | PQPOC</span>
+                <div className="mt-auto"><span className="text-[10px] font-bold text-blue-600 block">Data Date: {dataDate}</span></div>
               </div>
-            </div>
+          </div>
+          
+          {/* THANH ĐIỀU HƯỚNG BỘ MÔN (DISCIPLINE TABS) ĐƯỢC CHỐT CỨNG */}
+          <div className="flex gap-2 mb-3 overflow-x-auto pb-1 mt-1">
+             <button onClick={() => setActiveDiscipline('ALL')} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-colors flex items-center gap-1.5 ${activeDiscipline === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'}`}>
+                <Layers size={14}/> ALL DISCIPLINES
+             </button>
+             <div className="w-px bg-slate-200 mx-1 h-6 self-center"></div>
+             {STANDARD_DISCIPLINES.map(d => (
+                 <button key={d} onClick={() => setActiveDiscipline(d)} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-colors ${activeDiscipline === d ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-300 hover:border-blue-400 hover:text-blue-600'}`}>
+                     {d}
+                 </button>
+             ))}
           </div>
 
-          <div className="p-3 px-6 bg-slate-50 border-t border-slate-200 flex justify-between items-center min-h-[85px] overflow-x-auto">
-            <div className="flex items-center gap-2 shrink-0">
-               <button onClick={() => handleToggleFilter('All')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all bg-purple-50 border-purple-200 hover:bg-purple-100 ${statusFilters.length === 0 ? 'ring-2 ring-offset-1 ring-purple-400 shadow-sm' : 'opacity-70 hover:opacity-100'}`}>
-                  <span className="text-[11px] font-black uppercase mb-0.5 text-purple-600">Total</span>
-                  <span className="text-2xl font-black leading-none text-purple-700">{stats.total}</span>
-               </button>
-
-               <button onClick={() => handleToggleFilter('Not Started')} className={`flex flex-col items-center justify-center min-w-[85px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Not Started') ? 'bg-slate-100 border-slate-300 ring-2 ring-slate-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-50 opacity-70 hover:opacity-100'}`}>
-                  <span className="text-[11px] font-black uppercase mb-0.5 text-slate-600">Not Started</span>
-                  <span className="text-2xl font-black leading-none text-slate-700">{stats.notStarted}</span>
-               </button>
-
-               <div className="w-px bg-slate-300 mx-1 border-r border-dashed border-slate-300 h-8"></div>
-
-               <button onClick={() => handleToggleFilter('Completed')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Completed') ? 'bg-emerald-100 border-emerald-300 ring-2 ring-emerald-400 shadow-sm' : 'bg-white border-emerald-200 hover:bg-emerald-50 opacity-90 hover:opacity-100'}`} title="Tất cả các ITR đã làm xong">
-                  <span className="text-[11px] font-black uppercase mb-0.5 text-emerald-600">Done</span>
-                  <span className="text-2xl font-black leading-none text-emerald-700">{stats.completed}</span>
-               </button>
-
-               <button onClick={() => handleToggleFilter('Attached')} className={`flex flex-col items-center justify-center min-w-[85px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Attached') ? 'bg-blue-100 border-blue-300 ring-2 ring-blue-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-blue-50 opacity-70 hover:opacity-100'}`} title="Các ITR đã Done VÀ CÓ File PDF">
-                  <span className="text-[11px] font-black uppercase mb-0.5 text-blue-600 flex items-center gap-1"><FileCheck size={10}/>Attached</span>
-                  <span className="text-2xl font-black leading-none text-blue-700">{stats.attached}</span>
-               </button>
-
-               <button onClick={() => handleToggleFilter('Not Attached')} className={`flex flex-col items-center justify-center min-w-[85px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Not Attached') ? 'bg-slate-200 border-slate-400 ring-2 ring-slate-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-100 opacity-70 hover:opacity-100'}`} title="Các ITR đã Done nhưng CHƯA CÓ File">
-                  <span className="text-[11px] font-black uppercase mb-0.5 text-slate-600 flex items-center gap-1"><Paperclip size={10}/>Not Attach</span>
-                  <span className="text-2xl font-black leading-none text-slate-700">{stats.notAttached}</span>
-               </button>
-
-               <div className="w-px bg-slate-300 mx-1 border-r border-dashed border-slate-300 h-8"></div>
-
-               <button onClick={() => handleToggleFilter('Overdue')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Overdue') ? 'bg-red-100 border-red-300 ring-2 ring-red-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-red-50 opacity-70 hover:opacity-100'}`}>
-                  <span className="text-[11px] font-black uppercase mb-0.5 text-red-600 flex items-center gap-1"><AlertTriangle size={10}/>Overdue</span>
-                  <span className="text-2xl font-black leading-none text-red-700">{stats.overdue}</span>
-               </button>
-               <button onClick={() => handleToggleFilter('Upcoming')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Upcoming') ? 'bg-orange-100 border-orange-300 ring-2 ring-orange-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-orange-50 opacity-70 hover:opacity-100'}`}>
-                  <span className="text-[11px] font-black uppercase mb-0.5 text-orange-600 flex items-center gap-1"><Clock size={10}/>Upcoming</span>
-                  <span className="text-2xl font-black leading-none text-orange-700">{stats.upcoming}</span>
-               </button>
-
-               <div className="w-px bg-slate-200 mx-1"></div>
-
-               <button onClick={() => handleToggleFilter('DUPLICATES')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('DUPLICATES') ? 'bg-pink-100 border-pink-300 ring-2 ring-pink-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-pink-50 opacity-70 hover:opacity-100'}`} title="Show duplicated equipments (Same Tag & Checksheet)">
-                  <span className="text-[11px] font-black uppercase mb-0.5 text-pink-600 flex items-center gap-1"><Copy size={10}/>Duplicates</span>
-                  <span className="text-2xl font-black leading-none text-pink-700">{stats.duplicates}</span>
-               </button>
-
-               {stats.unverified > 0 && (
-                 <button onClick={() => handleToggleFilter('UNVERIFIED')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('UNVERIFIED') ? 'bg-yellow-100 border-yellow-400 ring-2 ring-yellow-400 shadow-sm' : 'bg-white border-yellow-300 hover:bg-yellow-50 opacity-90 hover:opacity-100'} animate-pulse`} title="Tags mới sinh ra từ Excel cần xác minh">
-                    <span className="text-[11px] font-black uppercase mb-0.5 text-yellow-700 flex items-center gap-1"><ShieldAlert size={10}/>Verify</span>
-                    <span className="text-2xl font-black leading-none text-yellow-800">{stats.unverified}</span>
-                 </button>
-               )}
-            </div>
-
-            <div className="flex items-center gap-2 pl-4 shrink-0 flex-wrap justify-end">
-              <select value={filterPlanMonth} onChange={(e) => setFilterPlanMonth(e.target.value)} className="px-2 h-[34px] bg-white border border-slate-300 rounded-md text-xs font-bold text-slate-600 outline-none w-28 hover:bg-slate-50 cursor-pointer">
-                  <option value="">Plan: All</option>
-                  {uniquePlanMonths.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-              <select value={filterCompMonth} onChange={(e) => setFilterCompMonth(e.target.value)} className="px-2 h-[34px] bg-white border border-slate-300 rounded-md text-xs font-bold text-slate-600 outline-none w-28 hover:bg-slate-50 cursor-pointer">
-                  <option value="">Comp: All</option>
-                  {uniqueCompMonths.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-              <div className="relative w-56">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search Tag, Checksheet..." className="w-full pl-8 pr-3 h-[34px] bg-white border border-slate-200 rounded-md text-xs font-bold focus:outline-none focus:border-blue-400"/>
-              </div>
+          <div className="flex items-center justify-between bg-white pb-3 border-t border-slate-200 pt-3">
+            <div className="flex gap-2">
+                <button onClick={() => { setActivePhaseTab('CC'); setStatusFilters([]); }} className={`flex items-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 rounded-t-lg ${activePhaseTab === 'CC' ? 'border-blue-600 text-blue-700 bg-blue-50/50' : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
+                    <Hammer size={16} className={activePhaseTab === 'CC' ? 'text-blue-600' : 'opacity-50'} /> Phase CC (ITR-A)
+                </button>
+                <button onClick={() => { setActivePhaseTab('PC'); setStatusFilters([]); }} className={`flex items-center gap-2 px-6 py-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 rounded-t-lg ${activePhaseTab === 'PC' ? 'border-amber-500 text-amber-700 bg-amber-50/50' : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>
+                    <Zap size={16} className={activePhaseTab === 'PC' ? 'text-amber-500' : 'opacity-50'} /> Phase PC (ITR-B)
+                </button>
             </div>
           </div>
         </div>
 
-        {/* ================= DATA GRID (BẢNG DỮ LIỆU CHÍNH) ================= */}
-        <div className="flex-1 p-4 bg-slate-100 flex flex-col min-h-0">
-          <div className="flex-1 bg-white border border-slate-300 shadow-sm rounded-lg overflow-auto relative">
-            <table className="text-left border-collapse table-fixed w-max min-w-full">
-              <thead className="bg-slate-50 text-[10px] text-slate-600 uppercase font-black sticky top-0 z-30 shadow-[0_1px_0_0_#cbd5e1]">
-                <tr>
-                  <th style={{ width: colWidths.tagNo }} className="p-3 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-40 text-center shadow-[1px_0_0_0_#cbd5e1]">Tag No <ColumnFilter filterKey="tagNo" options={uniqueValues.tagNo} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="tagNo" /></th>
-                  <th style={{ width: colWidths.desc }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Description <ColumnFilter filterKey="desc" options={uniqueValues.desc} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="desc" /></th>
-                  <th style={{ width: colWidths.subSys }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Sub-System <ColumnFilter filterKey="subSystem" options={uniqueValues.subSystem} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="subSys" /></th>
-                  <th style={{ width: colWidths.subSysDesc }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Sub-Sys Desc <ColumnFilter filterKey="subSystemDesc" options={uniqueValues.subSystemDesc} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="subSysDesc" /></th>
-                  <th style={{ width: colWidths.chk }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative text-blue-600">Type <ColumnFilter filterKey="type" options={uniqueValues.type} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="chk" /></th>
-                  <th style={{ width: colWidths.loc }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Location <ColumnFilter filterKey="location" options={uniqueValues.location} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="loc" /></th>
-                  <th style={{ width: colWidths.subCon }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Sub-Con <ColumnFilter filterKey="subContractor" options={uniqueValues.subContractor} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="subCon" /></th>
-                  <th style={{ width: colWidths.planFin }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Plan Fin <ColumnFilter filterKey="planFinish" options={uniqueValues.planFinish} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="planFin" /></th>
-                  <th style={{ width: colWidths.compDate }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative text-emerald-600">Comp Date <ColumnFilter filterKey="compDate" options={uniqueValues.compDate} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="compDate" /></th>
-                  <th style={{ width: colWidths.status }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Status <ColumnFilter filterKey="status" options={uniqueValues.status} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="status" /></th>
-                  <th style={{ width: colWidths.action }} className="p-3 sticky top-0 bg-slate-50 z-30 text-center font-bold">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {finalFilteredList.map((item) => {
-                  const itemKey = `${getCompareKey(item.tag_no)}_${getCompareKey(item.checksheet_type)}`;
-                  const isNewlyAdded = unverifiedNewItrs.includes(itemKey);
-                  const isJustCompleted = unverifiedCompletedItrs.includes(itemKey);
-                  const isMissing = unverifiedMissingItrs.includes(itemKey);
-                  
-                  const isUnverified = item.checksheet_type === 'UNVERIFIED';
-                  const isDup = isDuplicate(item);
-                  
-                  let rowBg = "hover:bg-slate-50";
-                  let textStyle = "";
+        <div className="p-3 px-6 flex justify-between items-center min-h-[90px] overflow-x-auto border-t border-slate-200">
+          <div className="flex items-center gap-0 shrink-0">
+             <div className="pr-5 border-r border-slate-200 flex gap-2">
+                 <button onClick={() => handleToggleFilter('TOTAL')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all bg-purple-50 border-purple-200 hover:bg-purple-100 ${statusFilters.length === 0 ? 'ring-2 ring-offset-1 ring-purple-400 shadow-sm' : 'opacity-70 hover:opacity-100'}`}>
+                    <span className="text-[11px] font-black uppercase mb-0.5 text-purple-600">Total</span>
+                    <span className="text-2xl font-black leading-none text-purple-700">{stats.total}</span>
+                 </button>
+                 
+                 <button onClick={() => handleToggleFilter('DUPLICATES')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('DUPLICATES') ? 'bg-pink-100 border-pink-300 ring-2 ring-pink-400 shadow-sm' : 'bg-pink-50 border-pink-200 hover:bg-pink-100 opacity-70 hover:opacity-100'}`} title="Show duplicated equipments (Same Tag No and Defect)">
+                    <span className="text-[11px] font-black uppercase mb-0.5 text-pink-600 flex items-center gap-1"><Copy size={10}/>Duplicates</span>
+                    <span className="text-2xl font-black leading-none text-pink-700">{stats.duplicates}</span>
+                 </button>
+             </div>
+             
+             {/* CHỖ NÀY GIỮ NGUYÊN KPI PUNCH HOẶC ITR */}
+             <button onClick={() => handleToggleFilter('Not Started')} className={`flex flex-col items-center justify-center min-w-[85px] h-[60px] px-3 rounded-xl border transition-all ml-4 ${statusFilters.includes('Not Started') ? 'bg-slate-100 border-slate-300 ring-2 ring-slate-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-50 opacity-70 hover:opacity-100'}`}>
+                <span className="text-[11px] font-black uppercase mb-0.5 text-slate-600">Not Started</span>
+                <span className="text-2xl font-black leading-none text-slate-700">{stats.notStarted}</span>
+             </button>
 
-                  // Ưu tiên hiển thị Missing > New > Completed > Unverified > Dup
-                  if (isMissing) { rowBg = "bg-red-50 hover:bg-red-100 shadow-inner opacity-80"; textStyle = "line-through text-red-400"; }
-                  else if (isNewlyAdded) rowBg = "bg-yellow-50 hover:bg-yellow-100 shadow-inner";
-                  else if (isJustCompleted) rowBg = "bg-emerald-50 hover:bg-emerald-100 shadow-inner";
-                  else if (isUnverified) rowBg = "bg-yellow-50 hover:bg-yellow-100";
-                  else if (isDup) rowBg = "bg-pink-50 hover:bg-pink-100";
+             <div className="w-px bg-slate-300 mx-1 border-r border-dashed border-slate-300 h-8"></div>
 
-                  const hasPdf = item.itr_records && !!item.itr_records.scanned_pdf;
-                  let style = "bg-slate-100 text-slate-600 border-slate-300"; let Icon = CircleDashed; let label = "NOT YET";
-                  if (item.itr_status === 'Completed') { style = "bg-emerald-50 text-emerald-700 border-emerald-300"; Icon = CheckCircle2; label = "DONE"; } 
-                  else if (item.itr_status === 'In Progress') { style = "bg-blue-50 text-blue-700 border-blue-300"; Icon = RefreshCw; label = "IN PROG"; }
+             <button onClick={() => handleToggleFilter('Completed')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Completed') ? 'bg-emerald-100 border-emerald-300 ring-2 ring-emerald-400 shadow-sm' : 'bg-white border-emerald-200 hover:bg-emerald-50 opacity-90 hover:opacity-100'}`} title="Tất cả các ITR đã làm xong">
+                <span className="text-[11px] font-black uppercase mb-0.5 text-emerald-600">Done</span>
+                <span className="text-2xl font-black leading-none text-emerald-700">{stats.completed}</span>
+             </button>
 
-                  return (
-                    <tr key={item.id} className={`transition-colors ${rowBg}`}>
-                      <td className={`p-3 border-r border-slate-300 text-[11px] font-black break-words whitespace-normal align-top sticky left-0 z-20 shadow-[1px_0_0_0_#cbd5e1] ${isMissing ? 'bg-red-50 text-red-500' : isNewlyAdded ? 'bg-yellow-50 text-slate-800' : isJustCompleted ? 'bg-emerald-50 text-slate-800' : isUnverified ? 'text-yellow-700 bg-yellow-50' : isDup ? 'text-pink-700 bg-pink-50' : 'text-slate-800 bg-white'}`}>
-                        {isMissing && <span className="absolute -top-2 -left-2 bg-red-600 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm animate-pulse z-10"><AlertTriangle size={8}/> MISSING</span>}
-                        {isNewlyAdded && !isMissing && <span className="absolute -top-2 -left-2 bg-yellow-500 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm animate-pulse z-10"><Sparkles size={8}/> NEW</span>}
-                        {isJustCompleted && !isMissing && <span className="absolute -top-2 -left-2 bg-emerald-500 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm z-10"><CheckCircle2 size={8}/> COMPLETED</span>}
-                        {isDup && !isUnverified && !isMissing && <Copy size={12} className="inline mr-1 text-pink-500" title="Duplicate Equipment"/>}
-                        {String(item.tag_no || '')}
-                      </td>
-                      <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top ${textStyle || 'text-slate-600'}`}>{String(item.description || '-')}</td>
-                      <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top text-center ${textStyle || 'text-slate-600'}`}>{String(item.sub_system_no || '-')}</td>
-                      <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top ${textStyle || 'text-slate-600'}`}>{String(item.sub_system_description || '-')}</td>
-                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || (isUnverified ? 'text-yellow-600' : 'text-blue-600')}`}>
-                        {isUnverified && !isMissing ? <span className="flex items-center justify-center gap-1"><ShieldAlert size={12}/>UNVERIFIED</span> : String(item.checksheet_type || '-')}
-                      </td>
-                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-500'}`}>{String(item.location || '-')}</td>
-                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-500'}`}>{String(item.subcontractor || '-')}</td>
-                      <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-600'}`}>{formatToExcelDate(item.plan_finish)}</td>
-                      <td className={`p-3 border-r border-slate-300 text-[10px] font-black text-center align-top bg-emerald-50/30 ${textStyle || 'text-emerald-600'}`}>{formatToExcelDate(item.complete_date)}</td>
-                      
-                      <td className={`p-3 border-r border-slate-300 align-top text-center ${textStyle}`}>
-                        <div className="flex items-center justify-center gap-2 w-full">
-                          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1 border ${style}`}>
-                            <Icon size={12} strokeWidth={3} /> {label}
-                          </span>
-                          
-                          {uploadingDirectId === item.id ? (
-                            <Loader size={16} className="animate-spin text-emerald-500 shrink-0" />
-                          ) : hasPdf ? (
-                            <a href={item.itr_records.scanned_pdf} target="_blank" rel="noreferrer" className="text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 p-1.5 rounded-md border border-emerald-200 transition-colors shrink-0 flex items-center justify-center" title="View Attached PDF">
-                              <FileCheck size={14} strokeWidth={2.5} />
-                            </a>
-                          ) : (
-                            <button 
-                              onClick={() => triggerDirectUpload(item)} 
-                              disabled={isUnverified || isMissing}
-                              className={`p-1.5 rounded-md border transition-colors shrink-0 flex items-center justify-center ${isUnverified || isMissing ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-500 hover:text-blue-600 border-slate-300 hover:border-blue-300 hover:bg-blue-50'}`}
-                              title="Attach PDF/Image"
-                            >
-                              <Paperclip size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
+             <button onClick={() => handleToggleFilter('Attached')} className={`flex flex-col items-center justify-center min-w-[85px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Attached') ? 'bg-blue-100 border-blue-300 ring-2 ring-blue-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-blue-50 opacity-70 hover:opacity-100'}`} title="Các ITR đã Done VÀ CÓ File PDF">
+                <span className="text-[11px] font-black uppercase mb-0.5 text-blue-600 flex items-center gap-1"><FileCheck size={10}/>Attached</span>
+                <span className="text-2xl font-black leading-none text-blue-700">{stats.attached}</span>
+             </button>
 
-                      <td className="p-3 align-top text-center">
-                        <div className="flex justify-center flex-wrap gap-1.5 w-full">
-                          
-                          {/* QUYỀN SINH SÁT CHO LỖI MISSING */}
-                          {isMissing && (
-                             <>
-                               <button onClick={() => dropMissingItr(item, itemKey)} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-red-100 text-red-700 px-2 py-1 rounded border border-red-300 hover:bg-red-600 hover:text-white shadow-sm" title="Xóa vĩnh viễn khỏi Database"><X size={13} strokeWidth={3}/> Drop</button>
-                               <button onClick={() => keepMissingItr(itemKey)} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-slate-100 text-slate-600 px-2 py-1 rounded border border-slate-300 hover:bg-slate-600 hover:text-white shadow-sm" title="Bỏ qua cảnh báo, giữ lại trong Database"><RotateCcw size={13} strokeWidth={2}/> Keep</button>
-                             </>
-                          )}
+             <button onClick={() => handleToggleFilter('Not Attached')} className={`flex flex-col items-center justify-center min-w-[85px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Not Attached') ? 'bg-slate-200 border-slate-400 ring-2 ring-slate-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-100 opacity-70 hover:opacity-100'}`} title="Các ITR đã Done nhưng CHƯA CÓ File">
+                <span className="text-[11px] font-black uppercase mb-0.5 text-slate-600 flex items-center gap-1"><Paperclip size={10}/>Not Attach</span>
+                <span className="text-2xl font-black leading-none text-slate-700">{stats.notAttached}</span>
+             </button>
 
-                          {/* NÚT VERIFY CHO ITR MỚI HOẶC VỪA ĐÓNG */}
-                          {isNewlyAdded && !isMissing && (
-                             <button onClick={() => verifySingleItr(itemKey, 'NEW')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-yellow-50 text-yellow-600 px-2 py-1 rounded border border-yellow-300 hover:bg-yellow-500 hover:text-white shadow-sm"><CheckCircle2 size={13}/> Verify</button>
-                          )}
-                          {isJustCompleted && !isMissing && (
-                             <button onClick={() => verifySingleItr(itemKey, 'COMPLETED')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-emerald-50 text-emerald-600 px-2 py-1 rounded border border-emerald-300 hover:bg-emerald-500 hover:text-white shadow-sm"><CheckCircle2 size={13}/> Verify</button>
-                          )}
+             <div className="w-px bg-slate-300 mx-1 border-r border-dashed border-slate-300 h-8"></div>
 
-                          {/* CÁC NÚT BẤM CŨ */}
-                          {(!isNewlyAdded && !isJustCompleted && !isMissing) && (
-                            <>
-                              <button onClick={() => openItrModal(item)} disabled={isUnverified} className={`px-2 py-1 rounded border transition-colors text-[10px] font-black uppercase shadow-sm ${isUnverified ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border-blue-200'}`}>Exec</button>
-                              <button onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className={`p-1 bg-white rounded border shadow-sm ${isDup ? 'text-pink-500 border-pink-200 hover:bg-pink-100' : 'text-slate-400 hover:text-slate-700 border-slate-200'}`}><Edit size={12}/></button>
-                            </>
-                          )}
-                          {!isMissing && <button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 bg-white rounded border shadow-sm text-slate-400 hover:text-red-600 border-slate-200 hover:bg-red-50" title="Delete"><Trash2 size={12}/></button>}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-                {finalFilteredList.length === 0 && (<tr><td colSpan="11" className="p-16 text-center text-slate-400 font-bold text-[11px]">No Equipment found.</td></tr>)}
-              </tbody>
-            </table>
+             <button onClick={() => handleToggleFilter('Overdue')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Overdue') ? 'bg-red-100 border-red-300 ring-2 ring-red-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-red-50 opacity-70 hover:opacity-100'}`}>
+                <span className="text-[11px] font-black uppercase mb-0.5 text-red-600 flex items-center gap-1"><AlertTriangle size={10}/>Overdue</span>
+                <span className="text-2xl font-black leading-none text-red-700">{stats.overdue}</span>
+             </button>
+             <button onClick={() => handleToggleFilter('Upcoming')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('Upcoming') ? 'bg-orange-100 border-orange-300 ring-2 ring-orange-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-orange-50 opacity-70 hover:opacity-100'}`}>
+                <span className="text-[11px] font-black uppercase mb-0.5 text-orange-600 flex items-center gap-1"><Clock size={10}/>Upcoming</span>
+                <span className="text-2xl font-black leading-none text-orange-700">{stats.upcoming}</span>
+             </button>
+
+             <div className="w-px bg-slate-200 mx-1"></div>
+             
+             {stats.unverified > 0 && (
+               <button onClick={() => handleToggleFilter('UNVERIFIED')} className={`flex flex-col items-center justify-center min-w-[75px] h-[60px] px-3 rounded-xl border transition-all ${statusFilters.includes('UNVERIFIED') ? 'bg-yellow-100 border-yellow-400 ring-2 ring-yellow-400 shadow-sm' : 'bg-white border-yellow-300 hover:bg-yellow-50 opacity-90 hover:opacity-100'} animate-pulse`} title="Tags mới sinh ra từ Excel cần xác minh">
+                  <span className="text-[11px] font-black uppercase mb-0.5 text-yellow-700 flex items-center gap-1"><ShieldAlert size={10}/>Verify</span>
+                  <span className="text-2xl font-black leading-none text-yellow-800">{stats.unverified}</span>
+               </button>
+             )}
           </div>
+
+          <div className="flex items-center gap-2 pl-4 shrink-0 flex-wrap justify-end">
+            <select value={filterPlanMonth} onChange={(e) => setFilterPlanMonth(e.target.value)} className="px-2 h-[34px] bg-white border border-slate-300 rounded-md text-xs font-bold text-slate-600 outline-none w-28 hover:bg-slate-50 cursor-pointer">
+                <option value="">Plan: All</option>
+                {uniquePlanMonths.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select value={filterCompMonth} onChange={(e) => setFilterCompMonth(e.target.value)} className="px-2 h-[34px] bg-white border border-slate-300 rounded-md text-xs font-bold text-slate-600 outline-none w-28 hover:bg-slate-50 cursor-pointer">
+                <option value="">Comp: All</option>
+                {uniqueCompMonths.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <div className="relative w-56">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search Tag, Checksheet..." className="w-full pl-8 pr-3 h-[34px] bg-white border border-slate-200 rounded-md text-xs font-bold focus:outline-none focus:border-blue-400"/>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 p-4 bg-slate-100 flex flex-col min-h-0">
+        <div className="flex-1 bg-white border border-slate-300 shadow-sm rounded-lg overflow-auto relative">
+          <table className="text-left border-collapse table-fixed w-max min-w-full">
+            <thead className="bg-slate-50 text-[10px] text-slate-600 uppercase font-black sticky top-0 z-30 shadow-[0_1px_0_0_#cbd5e1]">
+              <tr>
+                <th style={{ width: colWidths.tagNo }} className="p-3 border-r border-slate-300 sticky left-0 top-0 bg-slate-50 z-40 text-center shadow-[1px_0_0_0_#cbd5e1]">Tag No <ColumnFilter filterKey="tagNo" options={uniqueValues.tagNo} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="tagNo" /></th>
+                <th style={{ width: colWidths.desc }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Description <ColumnFilter filterKey="desc" options={uniqueValues.desc} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="desc" /></th>
+                <th style={{ width: colWidths.subSys }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Sub-System <ColumnFilter filterKey="subSystem" options={uniqueValues.subSystem} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="subSys" /></th>
+                <th style={{ width: colWidths.subSysDesc }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Sub-Sys Desc <ColumnFilter filterKey="subSystemDesc" options={uniqueValues.subSystemDesc} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="subSysDesc" /></th>
+                <th style={{ width: colWidths.disc }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative text-purple-600">Discipline <ColumnFilter filterKey="discipline" options={uniqueValues.discipline} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="disc" /></th>
+                <th style={{ width: colWidths.chk }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative text-blue-600">Type <ColumnFilter filterKey="type" options={uniqueValues.type} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="chk" /></th>
+                <th style={{ width: colWidths.loc }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Location <ColumnFilter filterKey="location" options={uniqueValues.location} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="loc" /></th>
+                <th style={{ width: colWidths.subCon }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Sub-Con <ColumnFilter filterKey="subContractor" options={uniqueValues.subContractor} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="subCon" /></th>
+                <th style={{ width: colWidths.planFin }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Plan Fin <ColumnFilter filterKey="planFinish" options={uniqueValues.planFinish} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="planFin" /></th>
+                <th style={{ width: colWidths.compDate }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative text-emerald-600">Comp Date <ColumnFilter filterKey="compDate" options={uniqueValues.compDate} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="compDate" /></th>
+                <th style={{ width: colWidths.status }} className="p-2 border-r border-slate-300 sticky top-0 bg-slate-50 z-30 text-center relative">Status <ColumnFilter filterKey="status" options={uniqueValues.status} activeFilters={columnFilters} setColumnFilters={setColumnFilters}/> <Resizer colKey="status" /></th>
+                <th style={{ width: colWidths.action }} className="p-3 sticky top-0 bg-slate-50 z-30 text-center font-bold">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {finalFilteredList.map((item) => {
+                const itemKey = `${getCompareKey(item.tag_no)}_${getCompareKey(item.checksheet_type)}`;
+                const isNewlyAdded = unverifiedNewItrs.includes(itemKey);
+                const isJustCompleted = unverifiedCompletedItrs.includes(itemKey);
+                const isMissing = unverifiedMissingItrs.includes(itemKey);
+                
+                const isUnverified = item.checksheet_type === 'UNVERIFIED';
+                const isDup = isDuplicate(item);
+                
+                let rowBg = "hover:bg-slate-50";
+                let textStyle = "";
+
+                if (isMissing) { rowBg = "bg-red-50 hover:bg-red-100 shadow-inner opacity-80"; textStyle = "line-through text-red-400"; }
+                else if (isNewlyAdded) rowBg = "bg-yellow-50 hover:bg-yellow-100 shadow-inner";
+                else if (isJustCompleted) rowBg = "bg-emerald-50 hover:bg-emerald-100 shadow-inner";
+                else if (isUnverified) rowBg = "bg-yellow-50 hover:bg-yellow-100";
+                else if (isDup) rowBg = "bg-pink-50 hover:bg-pink-100";
+
+                const hasPdf = item.itr_records && !!item.itr_records.scanned_pdf;
+                let style = "bg-slate-100 text-slate-600 border-slate-300"; let Icon = CircleDashed; let label = "NOT YET";
+                if (item.itr_status === 'Completed') { style = "bg-emerald-50 text-emerald-700 border-emerald-300"; Icon = CheckCircle2; label = "DONE"; } 
+                else if (item.itr_status === 'In Progress') { style = "bg-blue-50 text-blue-700 border-blue-300"; Icon = RefreshCw; label = "IN PROG"; }
+
+                return (
+                  <tr key={item.id} className={`transition-colors ${rowBg}`}>
+                    <td className={`p-3 border-r border-slate-300 text-[11px] font-black break-words whitespace-normal align-top sticky left-0 z-20 shadow-[1px_0_0_0_#cbd5e1] ${isMissing ? 'bg-red-50 text-red-500' : isNewlyAdded ? 'bg-yellow-50 text-slate-800' : isJustCompleted ? 'bg-emerald-50 text-slate-800' : isUnverified ? 'text-yellow-700 bg-yellow-50' : isDup ? 'text-pink-700 bg-pink-50' : 'text-slate-800 bg-white'}`}>
+                      {isMissing && <span className="absolute -top-2 -left-2 bg-red-600 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm animate-pulse z-10"><AlertTriangle size={8}/> MISSING</span>}
+                      {isNewlyAdded && !isMissing && <span className="absolute -top-2 -left-2 bg-yellow-500 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm animate-pulse z-10"><Sparkles size={8}/> NEW</span>}
+                      {isJustCompleted && !isMissing && <span className="absolute -top-2 -left-2 bg-emerald-500 text-white text-[8px] px-1 rounded font-black flex items-center gap-0.5 shadow-sm z-10"><CheckCircle2 size={8}/> COMPLETED</span>}
+                      {isDup && !isUnverified && !isMissing && <Copy size={12} className="inline mr-1 text-pink-500" title="Duplicate Equipment"/>}
+                      {String(item.tag_no || '')}
+                    </td>
+                    <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top ${textStyle || 'text-slate-600'}`}>{String(item.description || '-')}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top text-center ${textStyle || 'text-slate-600'}`}>{String(item.sub_system_no || '-')}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top ${textStyle || 'text-slate-600'}`}>{String(item.sub_system_description || '-')}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[11px] font-bold break-words whitespace-normal align-top text-center ${textStyle || 'text-purple-600'}`}>{String(item.discipline || '-')}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || (isUnverified ? 'text-yellow-600' : 'text-blue-600')}`}>
+                      {isUnverified && !isMissing ? <span className="flex items-center justify-center gap-1"><ShieldAlert size={12}/>UNVERIFIED</span> : String(item.checksheet_type || '-')}
+                    </td>
+                    <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-500'}`}>{String(item.location || '-')}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-500'}`}>{String(item.subcontractor || '-')}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[10px] font-bold text-center align-top ${textStyle || 'text-slate-600'}`}>{formatToExcelDate(item.plan_finish)}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[10px] font-black text-center align-top bg-emerald-50/30 ${textStyle || 'text-emerald-600'}`}>{formatToExcelDate(item.complete_date)}</td>
+                    
+                    <td className={`p-3 border-r border-slate-300 align-top text-center ${textStyle}`}>
+                      <div className="flex items-center justify-center gap-2 w-full">
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase flex items-center gap-1 border ${style}`}>
+                          <Icon size={12} strokeWidth={3} /> {label}
+                        </span>
+                        
+                        {uploadingDirectId === item.id ? (
+                          <Loader size={16} className="animate-spin text-emerald-500 shrink-0" />
+                        ) : hasPdf ? (
+                          <a href={item.itr_records.scanned_pdf} target="_blank" rel="noreferrer" className="text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 p-1.5 rounded-md border border-emerald-200 transition-colors shrink-0 flex items-center justify-center" title="View Attached PDF">
+                            <FileCheck size={14} strokeWidth={2.5} />
+                          </a>
+                        ) : (
+                          <button 
+                            onClick={() => triggerDirectUpload(item)} 
+                            disabled={isUnverified || isMissing}
+                            className={`p-1.5 rounded-md border transition-colors shrink-0 flex items-center justify-center ${isUnverified || isMissing ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-500 hover:text-blue-600 border-slate-300 hover:border-blue-300 hover:bg-blue-50'}`}
+                            title="Attach PDF/Image"
+                          >
+                            <Paperclip size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="p-3 align-top text-center">
+                      <div className="flex justify-center flex-wrap gap-1.5 w-full">
+                        
+                        {/* QUYỀN SINH SÁT CHO LỖI MISSING */}
+                        {isMissing && (
+                           <>
+                             <button onClick={() => dropMissingItr(item, itemKey)} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-red-100 text-red-700 px-2 py-1 rounded border border-red-300 hover:bg-red-600 hover:text-white shadow-sm" title="Xóa vĩnh viễn khỏi Database"><X size={13} strokeWidth={3}/> Drop</button>
+                             <button onClick={() => keepMissingItr(itemKey)} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-slate-100 text-slate-600 px-2 py-1 rounded border border-slate-300 hover:bg-slate-600 hover:text-white shadow-sm" title="Bỏ qua cảnh báo, giữ lại trong Database"><RotateCcw size={13} strokeWidth={2}/> Keep</button>
+                           </>
+                        )}
+
+                        {/* NÚT VERIFY CHO ITR MỚI HOẶC VỪA ĐÓNG */}
+                        {isNewlyAdded && !isMissing && (
+                           <button onClick={() => verifySingleItr(itemKey, 'NEW')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-yellow-50 text-yellow-600 px-2 py-1 rounded border border-yellow-300 hover:bg-yellow-500 hover:text-white shadow-sm"><CheckCircle2 size={13}/> Verify</button>
+                        )}
+                        {isJustCompleted && !isMissing && (
+                           <button onClick={() => verifySingleItr(itemKey, 'COMPLETED')} className="flex items-center gap-1 text-[10px] font-black transition-colors bg-emerald-50 text-emerald-600 px-2 py-1 rounded border border-emerald-300 hover:bg-emerald-500 hover:text-white shadow-sm"><CheckCircle2 size={13}/> Verify</button>
+                        )}
+
+                        {/* CÁC NÚT BẤM CŨ */}
+                        {(!isNewlyAdded && !isJustCompleted && !isMissing) && (
+                          <>
+                            <button onClick={() => openItrModal(item)} disabled={isUnverified} className={`px-2 py-1 rounded border transition-colors text-[10px] font-black uppercase shadow-sm ${isUnverified ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border-blue-200'}`}>Exec</button>
+                            <button onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className={`p-1 bg-white rounded border shadow-sm ${isDup ? 'text-pink-500 border-pink-200 hover:bg-pink-100' : 'text-slate-400 hover:text-slate-700 border-slate-200'}`}><Edit size={12}/></button>
+                          </>
+                        )}
+                        {!isMissing && <button onClick={() => handleDeleteEquipment(item.id, item.tag_no)} className="p-1 bg-white rounded border shadow-sm text-slate-400 hover:text-red-600 border-slate-200 hover:bg-red-50" title="Delete"><Trash2 size={12}/></button>}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {finalFilteredList.length === 0 && (<tr><td colSpan="12" className="p-16 text-center text-slate-400 font-bold text-[11px]">No Equipment found.</td></tr>)}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 import { 
   Search, RotateCcw, X, LayoutDashboard, Download, CheckCircle2, 
   AlertTriangle, Clock, RefreshCw, CircleDashed, Hammer, Zap, 
-  Printer, FileSignature, Upload, Loader, ShieldAlert, CheckSquare, ListChecks, Trash2
+  Printer, FileSignature, Upload, Loader, ShieldAlert, CheckSquare, ListChecks, Trash2, Layers
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -23,6 +23,25 @@ const getCompareKey = (str) => {
   if (!str) return '';
   return String(str).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 };
+
+const mapDiscipline = (raw) => {
+  const r = String(raw).toUpperCase().trim();
+  if (r === 'M' || r.includes('MECH')) return 'Mechanical';
+  if (r === 'P' || r.includes('PIPE') || r.includes('PIPING')) return 'Piping';
+  if (r === 'E' || r.includes('ELEC')) return 'Electrical';
+  if (r === 'I' || r.includes('INST')) return 'Instrument';
+  if (r === 'T' || r.includes('TELE')) return 'Telecom';
+  if (r === 'S' || r.includes('STRUC')) return 'Structure';
+  if (r.includes('ARCH')) return 'Architecture';
+  if (r.includes('HVAC')) return 'HVAC';
+  if (r.includes('SAFE')) return 'Safety';
+  return r ? 'Other' : 'Other';
+};
+
+const STANDARD_DISCIPLINES = [
+  'Architecture', 'Electrical', 'HVAC', 'Instrument', 
+  'Mechanical', 'Piping', 'Safety', 'Structure', 'Telecom'
+];
 
 const FilterPill = ({ active, onClick, label, count, colorKey, icon: Icon }) => {
   const themes = {
@@ -58,6 +77,7 @@ export default function CompletionsDashboard() {
   const [handovers, setHandovers] = useState({});
   const [punchlists, setPunchlists] = useState([]);
   
+  const [activeDiscipline, setActiveDiscipline] = useState('ALL'); 
   const [activePhaseTab, setActivePhaseTab] = useState('CC'); 
   const [activeFilter, setActiveFilter] = useState('ALL');
   
@@ -161,17 +181,11 @@ export default function CompletionsDashboard() {
             const updatesItr = {}; const insertsItr = {}; 
             const updatesPunch = {}; const insertsPunch = {}; 
             
-            // LƯU TRỮ ID CHỜ VERIFY - ITR
-            const trackedNewItrs = [];
-            const trackedCompletedItrs = [];
-            const importedItrKeys = new Set();
-            const importedItrSubSystems = new Set();
+            const trackedNewItrs = []; const trackedCompletedItrs = [];
+            const importedItrKeys = new Set(); const importedItrSubSystems = new Set();
 
-            // LƯU TRỮ ID CHỜ VERIFY - PUNCHLIST
-            const trackedNewPunches = [];
-            const trackedClosedPunches = [];
-            const importedPunchKeys = new Set();
-            const importedPunchSubSystems = new Set();
+            const trackedNewPunches = []; const trackedClosedPunches = [];
+            const importedPunchKeys = new Set(); const importedPunchSubSystems = new Set();
             
             let stats = { itrInsert: 0, itrUpdate: 0, punchInsert: 0, punchUpdate: 0 };
 
@@ -189,11 +203,12 @@ export default function CompletionsDashboard() {
                     const dataObjects = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { range: headerRowIndex, raw: false, defval: "" });
                     dataObjects.forEach(row => {
                         const normRow = {}; Object.keys(row).forEach(k => normRow[String(k).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()] = row[k]);
-                        const disc = String(normRow['discipline'] || normRow['disciplinecode'] || '').trim().toUpperCase();
-                        if (!disc.includes('MECH') && disc !== 'M') return; 
+                        
+                        const discRaw = String(normRow['discipline'] || normRow['disciplinecode'] || '').trim();
+                        const finalDisc = mapDiscipline(discRaw);
 
-                        const originalTagNo = String(normRow['tagno'] || normRow['equipmentno'] || '').trim().toUpperCase();
-                        const tCode = String(normRow['checksheettype'] || normRow['checksheet'] || '').trim().toUpperCase();
+                        const originalTagNo = String(normRow['tagno'] || normRow['equipmentno'] || normRow['tag'] || '').trim().toUpperCase();
+                        const tCode = String(normRow['checksheettype'] || normRow['checksheet'] || normRow['type'] || 'UNVERIFIED').trim().toUpperCase();
                         
                         const compareTag = getCompareKey(originalTagNo);
                         const compareType = getCompareKey(tCode || 'UNVERIFIED');
@@ -206,19 +221,17 @@ export default function CompletionsDashboard() {
                         let excelPhase = String(normRow['phase'] || 'CC').toUpperCase().trim();
 
                         let sysNo = String(normRow['systemno'] || normRow['system'] || '').trim().toUpperCase();
-                        let subSysNo = String(normRow['subsystemno'] || normRow['subsystem'] || '').trim().toUpperCase();
+                        let subSysNo = String(normRow['subsystemno'] || normRow['subsystem'] || normRow['subsys'] || '').trim().toUpperCase();
                         if (!sysNo && subSysNo) {
                             const parts = subSysNo.split('-');
                             if (parts.length >= 2) sysNo = `${parts[0]}-${parts[1]}`; else sysNo = subSysNo;
                         }
 
-                        // Tracking ITRs
                         importedItrKeys.add(eqKey);
                         if (subSysNo) importedItrSubSystems.add(subSysNo);
 
                         const targetEq = insertsItr[eqKey] || updatesItr[eqKey] || itrMap[eqKey];
                         
-                        // LÝ LUẬN VERIFY ITR CHÍNH XÁC
                         if (!itrMap[eqKey]) {
                             trackedNewItrs.push(eqKey);
                         } else if (targetEq && targetEq.itr_status !== 'Completed' && completeDateStr) {
@@ -232,7 +245,7 @@ export default function CompletionsDashboard() {
                             system_no: sysNo, sub_system_no: subSysNo,
                             sub_system_description: String(normRow['subsystemdescription'] || normRow['subsysdesc'] || ''),
                             checksheet_type: tCode || 'UNVERIFIED',
-                            phase: excelPhase, discipline: 'Mechanical',
+                            phase: excelPhase, discipline: finalDisc,
                             location: String(normRow['location'] || ''),
                             subcontractor: String(normRow['subcontractor'] || normRow['subcon'] || ''),
                             plan_finish: planFinishStr ? new Date(planFinishStr).toISOString() : null,
@@ -266,12 +279,12 @@ export default function CompletionsDashboard() {
                     dataObjects.forEach(row => {
                         const normRow = {}; Object.keys(row).forEach(k => normRow[String(k).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()] = row[k]);
                         
-                        const disc = String(normRow['disciplinecode'] || normRow['discipline'] || '').trim().toUpperCase();
-                        if (!disc.includes('MECH') && disc !== 'M') return; 
+                        const discRaw = String(normRow['disciplinecode'] || normRow['discipline'] || '').trim();
+                        const finalDisc = mapDiscipline(discRaw);
 
-                        const originalTagNo = String(normRow['tagno'] || normRow['equipmentno'] || '').trim().toUpperCase();
+                        const originalTagNo = String(normRow['tagno'] || normRow['equipmentno'] || normRow['tag'] || '').trim().toUpperCase();
                         const compareTag = getCompareKey(originalTagNo);
-                        const plNo = String(normRow['punchlistno'] || normRow['punchid'] || '').trim();
+                        const plNo = String(normRow['punchlistno'] || normRow['punchid'] || normRow['punchno'] || normRow['punch'] || '').trim();
                         const plKey = getCompareKey(plNo);
 
                         if (!compareTag || !plNo || originalTagNo.includes('TOTAL')) return;
@@ -280,19 +293,17 @@ export default function CompletionsDashboard() {
                         const status = statusVal.includes('CLOSE') || statusVal.includes('DONE') || statusVal === 'C' ? 'CLOSED' : 'OPEN';
                         
                         let sysNo = String(normRow['systemno'] || normRow['system'] || '').trim().toUpperCase();
-                        let subSysNo = String(normRow['subsystemno'] || normRow['subsystem'] || '').trim().toUpperCase();
+                        let subSysNo = String(normRow['subsystemno'] || normRow['subsystem'] || normRow['subsys'] || '').trim().toUpperCase();
                         if (!sysNo && subSysNo) {
                             const parts = subSysNo.split('-');
                             if (parts.length >= 2) sysNo = `${parts[0]}-${parts[1]}`; else sysNo = subSysNo;
                         }
 
-                        // Tracking Punchlists
                         importedPunchKeys.add(plKey);
                         if (subSysNo) importedPunchSubSystems.add(subSysNo);
 
                         const targetPunch = insertsPunch[plKey] || updatesPunch[plKey] || punchMap[plKey];
                         
-                        // LÝ LUẬN VERIFY PUNCH CHÍNH XÁC
                         if (!punchMap[plKey]) {
                             trackedNewPunches.push(plNo);
                         } else if (targetPunch && targetPunch.status !== 'CLOSED' && status === 'CLOSED') {
@@ -302,6 +313,7 @@ export default function CompletionsDashboard() {
                         const buildPayload = (existingId) => ({
                             ...(existingId ? { id: existingId } : {}),
                             punch_id: plNo, tag_no: originalTagNo, system_no: sysNo, sub_system_no: subSysNo,
+                            discipline: finalDisc, 
                             category: String(normRow['category'] || 'B').trim(),
                             defect_description: String(normRow['defectdescription'] || normRow['description'] || '').trim(),
                             corrective_action: String(normRow['correctiveaction'] || '').trim(),
@@ -328,24 +340,22 @@ export default function CompletionsDashboard() {
             setImportStatus('Đang đổ dữ liệu ITR...'); processItrSheet();
             setImportStatus('Đang bóc tách Punchlist Master...'); processPunchlistSheet();
             
-            // ================= THUẬT TOÁN TÌM LỖI MISSING CỤC BỘ =================
             const trackedMissingItrs = [];
             liveItr.forEach(eq => {
                 const dbEqKey = `${getCompareKey(eq.tag_no)}_${getCompareKey(eq.checksheet_type)}`;
-                // Chỉ bắt lỗi Missing nếu Sub-System của thiết bị này CÓ MẶT trong file Excel vừa úp
-                if (eq.sub_system_no && importedItrSubSystems.has(eq.sub_system_no) && !importedItrKeys.has(dbEqKey)) {
+                const dbSubSys = String(eq.sub_system_no || '').trim().toUpperCase(); 
+                if (dbSubSys && importedItrSubSystems.has(dbSubSys) && !importedItrKeys.has(dbEqKey)) {
                     trackedMissingItrs.push(dbEqKey);
                 }
             });
 
             const trackedMissingPunches = [];
             livePunch.forEach(p => {
-                // Tương tự cho Punchlist
-                if (p.sub_system_no && importedPunchSubSystems.has(p.sub_system_no) && !importedPunchKeys.has(getCompareKey(p.punch_id))) {
+                const dbSubSys = String(p.sub_system_no || '').trim().toUpperCase(); 
+                if (dbSubSys && importedPunchSubSystems.has(dbSubSys) && !importedPunchKeys.has(getCompareKey(p.punch_id))) {
                     trackedMissingPunches.push(p.punch_id);
                 }
             });
-            // ====================================================================
 
             setImportStatus('Đang đẩy dữ liệu lên Database...');
             
@@ -373,13 +383,10 @@ export default function CompletionsDashboard() {
                 }
             }
 
-            // GHI NHỚ ID CẦN VERIFY (CỘNG DỒN) VÀO LOCALSTORAGE CHO CẢ ITR VÀ PUNCH
             const getParsed = (key) => JSON.parse(localStorage.getItem(key) || '[]');
-            
             localStorage.setItem('unverifiedNewItrs', JSON.stringify(Array.from(new Set([...getParsed('unverifiedNewItrs'), ...trackedNewItrs]))));
             localStorage.setItem('unverifiedCompletedItrs', JSON.stringify(Array.from(new Set([...getParsed('unverifiedCompletedItrs'), ...trackedCompletedItrs]))));
             localStorage.setItem('unverifiedMissingItrs', JSON.stringify(Array.from(new Set([...getParsed('unverifiedMissingItrs'), ...trackedMissingItrs]))));
-
             localStorage.setItem('unverifiedNewPunches', JSON.stringify(Array.from(new Set([...getParsed('unverifiedNewPunches'), ...trackedNewPunches]))));
             localStorage.setItem('unverifiedClosedPunches', JSON.stringify(Array.from(new Set([...getParsed('unverifiedClosedPunches'), ...trackedClosedPunches]))));
             localStorage.setItem('unverifiedMissingPunches', JSON.stringify(Array.from(new Set([...getParsed('unverifiedMissingPunches'), ...trackedMissingPunches]))));
@@ -393,7 +400,10 @@ export default function CompletionsDashboard() {
     reader.readAsBinaryString(file); 
   };
 
-  const phaseEquipList = equipList.filter(item => item.phase === activePhaseTab);
+  const discEquipList = activeDiscipline === 'ALL' ? equipList : equipList.filter(i => String(i.discipline || 'OTHER').toUpperCase() === String(activeDiscipline).toUpperCase());
+  const discPunchlists = activeDiscipline === 'ALL' ? punchlists : punchlists.filter(i => String(i.discipline || 'OTHER').toUpperCase() === String(activeDiscipline).toUpperCase());
+
+  const phaseEquipList = discEquipList.filter(item => item.phase === activePhaseTab);
   const validEquipList = phaseEquipList.filter(item => item.checksheet_type !== 'UNVERIFIED'); 
   const unverifiedCount = phaseEquipList.length - validEquipList.length;
 
@@ -416,12 +426,12 @@ export default function CompletionsDashboard() {
     if (item.itr_status === 'Completed') subSystemsMap[sub].done++; 
   });
 
-  punchlists.forEach(pl => {
+  discPunchlists.forEach(pl => {
       const sub = pl.sub_system_no; if(!sub || !subSystemsMap[sub]) return;
       
       let plPhase = pl.phase_origin;
       if (plPhase === 'N/A' || !plPhase) {
-          const tagInfo = equipList.find(e => getCompareKey(e.tag_no) === getCompareKey(pl.tag_no));
+          const tagInfo = discEquipList.find(e => getCompareKey(e.tag_no) === getCompareKey(pl.tag_no));
           if (tagInfo) plPhase = tagInfo.phase;
       }
       
@@ -469,7 +479,7 @@ export default function CompletionsDashboard() {
 
   const burndownChartData = useMemo(() => {
     try {
-      const filteredPls = punchlists.filter(p => {
+      const filteredPls = discPunchlists.filter(p => {
           if (filterSystem && String(p.system_no) !== filterSystem) return false;
           if (filterSubSystem && String(p.sub_system_no) !== filterSubSystem) return false;
           return true;
@@ -491,7 +501,7 @@ export default function CompletionsDashboard() {
           return { name: dateStr, Generated: cumulativeGenerated, Closed: cumulativeClosed, Remaining: cumulativeGenerated - cumulativeClosed };
       });
     } catch (e) { return []; }
-  }, [punchlists, filterSystem, filterSubSystem]); 
+  }, [discPunchlists, filterSystem, filterSubSystem]); 
 
   const submitHandover = async (e) => {
       e.preventDefault();
@@ -600,6 +610,18 @@ export default function CompletionsDashboard() {
                   <div className="mt-auto"><span className="text-[10px] font-bold text-blue-600 block">Data Date: {dataDate}</span></div>
                 </div>
             </div>
+
+            <div className="flex gap-2 mb-3 overflow-x-auto pb-1 mt-1">
+               <button onClick={() => setActiveDiscipline('ALL')} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-colors flex items-center gap-1.5 ${activeDiscipline === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'}`}>
+                  <Layers size={14}/> ALL DISCIPLINES
+               </button>
+               <div className="w-px bg-slate-200 mx-1 h-6 self-center"></div>
+               {STANDARD_DISCIPLINES.map(d => (
+                   <button key={d} onClick={() => setActiveDiscipline(d)} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-colors ${activeDiscipline === d ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-300 hover:border-blue-400 hover:text-blue-600'}`}>
+                       {d}
+                   </button>
+               ))}
+            </div>
             
             <div className="flex items-center gap-4 bg-white pb-3">
               <div className="flex gap-2">
@@ -618,13 +640,13 @@ export default function CompletionsDashboard() {
         <div className="flex-1 overflow-auto p-4 space-y-4 bg-slate-100">
           {(unverifiedCount > 0) && (
             <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between shadow-sm shrink-0">
-               <div className="flex items-center gap-2 text-amber-800 text-[11px] font-bold"><AlertTriangle size={18} className="text-amber-600" /><span>CẢNH BÁO: Có {unverifiedCount} ITR rác từ Excel (Không có checksheet hợp lệ). Hệ thống đã tự động lọc ẩn.</span></div>
+               <div className="flex items-center gap-2 text-amber-800 text-[11px] font-bold"><AlertTriangle size={18} className="text-amber-600" /><span>CẢNH BÁO: Có {unverifiedCount} ITR rác từ Excel (Không có checksheet hợp lệ) trong bộ môn này. Hệ thống đã tự động lọc ẩn.</span></div>
             </div>
           )}
 
           <div className="grid grid-cols-12 gap-4 shrink-0">
             <div className="col-span-8 bg-white p-5 rounded-xl border border-slate-300 shadow-sm flex flex-col h-[300px]">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Punchlist Burndown Trend</h3>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Punchlist Burndown Trend ({activeDiscipline})</h3>
               <div className="flex-1 w-full min-h-0">
                 {burndownChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -639,12 +661,12 @@ export default function CompletionsDashboard() {
                       <Line type="monotone" dataKey="Remaining" stroke="#f97316" strokeWidth={3} dot={{r: 2}} name="Remaining Open" isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
-                ) : (<div className="flex h-full items-center justify-center text-slate-400 text-xs font-bold bg-slate-50/50 rounded border border-dashed border-slate-200">No punchlist data available for trend.</div>)}
+                ) : (<div className="flex h-full items-center justify-center text-slate-400 text-xs font-bold bg-slate-50/50 rounded border border-dashed border-slate-200">No punchlist data available for {activeDiscipline}.</div>)}
               </div>
             </div>
             
             <div className="col-span-4 bg-white p-5 rounded-xl border border-slate-300 shadow-sm flex flex-col justify-center items-center h-[300px] relative">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest absolute top-5 left-5">ITR Progress</h3>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest absolute top-5 left-5">ITR Progress ({activeDiscipline})</h3>
               <div className="relative w-40 h-40 flex items-center justify-center mt-6">
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" className="text-slate-100" />
@@ -699,7 +721,7 @@ export default function CompletionsDashboard() {
                           <td className="p-3 align-middle text-center">
                             {s.status === 'ACCEPTED' ? (
                               <div className="flex items-center justify-center gap-3 mx-auto w-fit" title={`Cert No: ${s.hoData[`${activePhaseTab === 'CC' ? 'mc' : 'rfsu'}_cert_no`]}`}>
-                                <span className={`text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border ${statusBg} ${statusText}`}><StatusIcon size={14} strokeWidth={3}/> ACCEPTED</span>
+                                <span className={`text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border ${statusBg}${statusText}`}><StatusIcon size={14} strokeWidth={3}/> ACCEPTED</span>
                               </div>
                             ) : s.status === 'READY' ? (
                               <button onClick={() => setHandoverModal({ isOpen: true, subSystem: s.name, certNo: '', signDate: new Date().toISOString().split('T')[0] })} className="text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-full shadow-md flex items-center gap-1.5 mx-auto transition-colors">
