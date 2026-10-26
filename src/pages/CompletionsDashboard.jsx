@@ -245,7 +245,7 @@ export default function CompletionsDashboard() {
                             system_no: sysNo, sub_system_no: subSysNo,
                             sub_system_description: String(normRow['subsystemdescription'] || normRow['subsysdesc'] || ''),
                             checksheet_type: tCode || 'UNVERIFIED',
-                            phase: excelPhase, discipline: finalDisc,
+                            phase: excelPhase, discipline: finalDisc, 
                             location: String(normRow['location'] || ''),
                             subcontractor: String(normRow['subcontractor'] || normRow['subcon'] || ''),
                             plan_finish: planFinishStr ? new Date(planFinishStr).toISOString() : null,
@@ -400,8 +400,14 @@ export default function CompletionsDashboard() {
     reader.readAsBinaryString(file); 
   };
 
-  const discEquipList = activeDiscipline === 'ALL' ? equipList : equipList.filter(i => String(i.discipline || 'OTHER').toUpperCase() === String(activeDiscipline).toUpperCase());
-  const discPunchlists = activeDiscipline === 'ALL' ? punchlists : punchlists.filter(i => String(i.discipline || 'OTHER').toUpperCase() === String(activeDiscipline).toUpperCase());
+  // CHỐT CHẶN: Dùng toUpperCase() và trim() để ép kiểu tuyệt đối
+  const discEquipList = activeDiscipline === 'ALL' 
+      ? equipList 
+      : equipList.filter(i => String(i.discipline || 'OTHER').trim().toUpperCase() === String(activeDiscipline).trim().toUpperCase());
+      
+  const discPunchlists = activeDiscipline === 'ALL' 
+      ? punchlists 
+      : punchlists.filter(i => String(i.discipline || 'OTHER').trim().toUpperCase() === String(activeDiscipline).trim().toUpperCase());
 
   const phaseEquipList = discEquipList.filter(item => item.phase === activePhaseTab);
   const validEquipList = phaseEquipList.filter(item => item.checksheet_type !== 'UNVERIFIED'); 
@@ -721,7 +727,7 @@ export default function CompletionsDashboard() {
                           <td className="p-3 align-middle text-center">
                             {s.status === 'ACCEPTED' ? (
                               <div className="flex items-center justify-center gap-3 mx-auto w-fit" title={`Cert No: ${s.hoData[`${activePhaseTab === 'CC' ? 'mc' : 'rfsu'}_cert_no`]}`}>
-                                <span className={`text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border ${statusBg}${statusText}`}><StatusIcon size={14} strokeWidth={3}/> ACCEPTED</span>
+                                <span className={`text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border ${statusBg} ${statusText}`}><StatusIcon size={14} strokeWidth={3}/> ACCEPTED</span>
                               </div>
                             ) : s.status === 'READY' ? (
                               <button onClick={() => setHandoverModal({ isOpen: true, subSystem: s.name, certNo: '', signDate: new Date().toISOString().split('T')[0] })} className="text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-full shadow-md flex items-center gap-1.5 mx-auto transition-colors">

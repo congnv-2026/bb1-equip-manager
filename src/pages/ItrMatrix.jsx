@@ -159,11 +159,9 @@ export default function ItrMatrix() {
   const [statusFilters, setStatusFilters] = useState([]);
   const [verificationFilter, setVerificationFilter] = useState('ALL'); 
 
-  // ================= STATE DÀNH RIÊNG CHO QC VERIFICATION =================
   const [unverifiedNewItrs, setUnverifiedNewItrs] = useState([]);
   const [unverifiedCompletedItrs, setUnverifiedCompletedItrs] = useState([]);
   const [unverifiedMissingItrs, setUnverifiedMissingItrs] = useState([]);
-  // =======================================================================
 
   const [columnFilters, setColumnFilters] = useState({
     tagNo: [], desc: [], subSystem: [], subSystemDesc: [], discipline: [],
@@ -275,8 +273,11 @@ export default function ItrMatrix() {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const next7Days = new Date(today); next7Days.setDate(today.getDate() + 7);
 
-  // VÁ LỖI TẠI ĐÂY: Dùng toUpperCase() để ép kiểu an toàn tuyệt đối
-  const discEquipList = activeDiscipline === 'ALL' ? equipList : equipList.filter(i => String(i.discipline || 'OTHER').toUpperCase() === String(activeDiscipline).toUpperCase());
+  // CHỐT CHẶN: Ép kiểu toàn bộ về chữ in hoa không khoảng trắng để tránh lỗi "Electrical" lọt vào "PIPING"
+  const discEquipList = activeDiscipline === 'ALL' 
+      ? equipList 
+      : equipList.filter(i => String(i.discipline || 'OTHER').trim().toUpperCase() === String(activeDiscipline).trim().toUpperCase());
+      
   const phaseList = discEquipList.filter(item => item.phase === activePhaseTab);
 
   const duplicateMap = {};
@@ -639,6 +640,7 @@ export default function ItrMatrix() {
         </div>
       )}
 
+      {/* THANH CÔNG CỤ TOOLBAR CHÍNH */}
       <div className="flex justify-between items-center px-6 pt-4 pb-2 shrink-0 bg-white border-b border-slate-200 z-30 relative">
          <div className="flex gap-2">
             <button onClick={handleClearData} className="px-3 h-[32px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm" title={`Xóa toàn bộ Tag của Phase ${activePhaseTab}`}>
@@ -736,7 +738,6 @@ export default function ItrMatrix() {
                  </button>
              </div>
              
-             {/* CHỖ NÀY GIỮ NGUYÊN KPI PUNCH HOẶC ITR */}
              <button onClick={() => handleToggleFilter('Not Started')} className={`flex flex-col items-center justify-center min-w-[85px] h-[60px] px-3 rounded-xl border transition-all ml-4 ${statusFilters.includes('Not Started') ? 'bg-slate-100 border-slate-300 ring-2 ring-slate-400 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-50 opacity-70 hover:opacity-100'}`}>
                 <span className="text-[11px] font-black uppercase mb-0.5 text-slate-600">Not Started</span>
                 <span className="text-2xl font-black leading-none text-slate-700">{stats.notStarted}</span>
@@ -923,6 +924,59 @@ export default function ItrMatrix() {
           </table>
         </div>
       </div>
+
+      <div id="printable-master-list" className="hidden">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #cbd5e1', paddingBottom: '8px', marginBottom: '12px' }}>
+          <div style={{ fontWeight: '900', fontSize: '12px', textAlign: 'left', width: '33%', color: '#334155' }}>MCDERMOTT | PTSC</div>
+          <div style={{ textAlign: 'center', width: '33%' }}>
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>VIETNAM BLOCK B GAS PROJECT</h2>
+            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginTop: '4px', textTransform: 'uppercase' }}>
+              {activeDiscipline === 'ALL' ? 'GLOBAL' : activeDiscipline} ITR INSPECTION RECORDS (PHASE {activePhaseTab})
+            </div>
+          </div>
+          <div style={{ textAlign: 'right', width: '33%' }}>
+            <div style={{ fontWeight: '900', fontSize: '12px', color: '#334155' }}>PETROVIETNAM | PQPOC</div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#2563eb', marginTop: '4px' }}>Data Date: {dataDate}</div>
+            <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>Printed: {formatToExcelDate(new Date().toISOString())}</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', fontWeight: 'bold', fontSize: '12px', backgroundColor: '#f1f5f9', padding: '10px', border: '1px solid #cbd5e1' }}>
+          <span style={{ color: '#7e22ce' }}>TOTAL: {stats.total}</span>
+          <span style={{ color: '#64748b' }}>NOT STARTED: {stats.notStarted}</span>
+          <span style={{ color: '#059669' }}>DONE: {stats.completed}</span>
+          <span style={{ color: '#2563eb' }}>(ATTACHED: {stats.attached}</span>
+          <span style={{ color: '#dc2626' }}>/ NOT ATTACHED: {stats.notAttached})</span>
+        </div>
+
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', tableLayout: 'fixed' }}>
+          <thead>
+            <tr>
+              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '15%' }}>Tag No</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '25%' }}>Description</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '10%' }}>Sub-System</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '20%' }}>Sub-Sys Desc</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '10%' }}>Checksheet</th>
+              <th style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#f8fafc', textAlign: 'center', width: '10%' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {finalFilteredList.map(item => (
+              <tr key={`print-list-${item.id}`}>
+                <td style={{ border: '1px solid #cbd5e1', padding: '6px', fontWeight: 'bold', textAlign: 'left' }}>{item.tag_no}</td>
+                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'left' }}>{item.description || '-'}</td>
+                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'center' }}>{item.sub_system_no || '-'}</td>
+                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'left' }}>{item.sub_system_description || '-'}</td>
+                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'center', color: '#2563eb', fontWeight: 'bold' }}>{item.checksheet_type || '-'}</td>
+                <td style={{ border: '1px solid #cbd5e1', padding: '6px', textAlign: 'center', fontWeight: 'bold', color: item.itr_status === 'Completed' ? '#059669' : item.itr_status === 'In Progress' ? '#2563eb' : '#64748b' }}>
+                    {item.itr_status === 'Completed' ? 'DONE' : item.itr_status === 'In Progress' ? 'IN PROG' : 'NOT YET'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
     </div>
   );
 }

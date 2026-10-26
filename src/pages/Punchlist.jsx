@@ -296,8 +296,10 @@ export default function PunchlistMaster() {
     else setStatusFilters(prev => prev.includes(filterKey) ? prev.filter(k => k !== filterKey) : [...prev, filterKey]);
   };
 
-  // VÁ LỖI TẠI ĐÂY: Dùng toUpperCase() để ép kiểu an toàn tuyệt đối
-  const discPunchlists = activeDiscipline === 'ALL' ? punchlists : punchlists.filter(p => String(p.discipline || 'OTHER').toUpperCase() === String(activeDiscipline).toUpperCase());
+  // CHỐT CHẶN: Ép kiểu toàn bộ về chữ in hoa không khoảng trắng để tránh lỗi "Electrical" lọt vào "PIPING"
+  const discPunchlists = activeDiscipline === 'ALL' 
+      ? punchlists 
+      : punchlists.filter(p => String(p.discipline || 'OTHER').trim().toUpperCase() === String(activeDiscipline).trim().toUpperCase());
 
   const duplicateMap = {};
   discPunchlists.forEach(p => { const key = `${getCompareKey(p.tagNo)}___${String(p.defect).trim().toLowerCase()}`; duplicateMap[key] = (duplicateMap[key] || 0) + 1; });
@@ -531,6 +533,7 @@ export default function PunchlistMaster() {
         </div>
       )}
 
+      {/* THANH CÔNG CỤ TOOLBAR CHÍNH */}
       <div className="flex justify-between items-center px-6 pt-4 pb-2 shrink-0 bg-white border-b border-slate-200 z-30 relative">
          <div className="flex gap-2">
             <button onClick={handleClearAllPunches} className="px-3 h-[32px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-md flex items-center gap-1.5 transition-colors shadow-sm" title="Xóa toàn bộ Punchlist trên hệ thống">
@@ -539,6 +542,7 @@ export default function PunchlistMaster() {
          </div>
 
          <div className="flex gap-2">
+            {/* DẢI BĂNG VERIFICATION MODE QC */}
             {(unverifiedNewPunches.length > 0 || unverifiedClosedPunches.length > 0 || unverifiedMissingPunches.length > 0) && (
               <div className="flex items-center bg-slate-800 text-white rounded-md p-1 mr-4 shadow-lg animate-in slide-in-from-right duration-300">
                 <span className="text-[10px] font-black uppercase px-3 text-slate-300 flex items-center gap-1"><ShieldCheck size={12}/> Verify Mode:</span>
@@ -588,6 +592,7 @@ export default function PunchlistMaster() {
               </div>
           </div>
 
+          {/* THANH ĐIỀU HƯỚNG BỘ MÔN (DISCIPLINE TABS) ĐƯỢC CHỐT CỨNG */}
           <div className="flex gap-2 mb-3 overflow-x-auto pb-1 mt-1">
              <button onClick={() => setActiveDiscipline('ALL')} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase transition-colors flex items-center gap-1.5 ${activeDiscipline === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'}`}>
                 <Layers size={14}/> ALL DISCIPLINES
@@ -679,7 +684,7 @@ export default function PunchlistMaster() {
                          {pl.punchId}
                       </span>
                     </td>
-                    <td className={`p-3 border-r border-slate-300 text-[11px] text-left font-black align-top ${textStyle}${isDup && !isMissing ? 'text-pink-600' : 'text-blue-600'}`}>{pl.tagNo}</td>
+                    <td className={`p-3 border-r border-slate-300 text-[11px] text-left font-black align-top ${textStyle} ${isDup && !isMissing ? 'text-pink-600' : 'text-blue-600'}`}>{pl.tagNo}</td>
                     <td className={`p-3 border-r border-slate-300 text-[11px] font-bold align-top text-center ${textStyle || 'text-slate-600'}`}>{pl.system}</td>
                     <td className={`p-3 border-r border-slate-300 text-[11px] font-bold align-top ${textStyle || 'text-slate-600'}`}>{pl.subSystem}</td>
                     <td className={`p-3 border-r border-slate-300 text-[11px] font-bold align-top text-center ${textStyle || 'text-purple-600'}`}>{pl.discipline}</td>
@@ -736,18 +741,28 @@ export default function PunchlistMaster() {
         </div>
       </div>
 
+      {/* ================= BẢN IN MASTER LIST ================= */}
       <div id="printable-punchlist" className="hidden">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #cbd5e1', paddingBottom: '8px', marginBottom: '12px' }}>
           <div style={{ fontWeight: '900', fontSize: '12px', textAlign: 'left', width: '33%', color: '#334155' }}>MCDERMOTT | PTSC</div>
           <div style={{ textAlign: 'center', width: '33%' }}>
             <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#0f172a', textTransform: 'uppercase' }}>VIETNAM BLOCK B GAS PROJECT</h2>
-            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginTop: '4px', textTransform: 'uppercase' }}>MECHANICAL PUNCHLIST MASTER RECORD</div>
+            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginTop: '4px', textTransform: 'uppercase' }}>
+              {activeDiscipline === 'ALL' ? 'GLOBAL' : activeDiscipline} PUNCHLIST MASTER RECORD
+            </div>
           </div>
           <div style={{ textAlign: 'right', width: '33%' }}>
             <div style={{ fontWeight: '900', fontSize: '12px', color: '#334155' }}>PETROVIETNAM | PQPOC</div>
             <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#2563eb', marginTop: '4px' }}>Data Date: {dataDate}</div>
             <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>Printed: {formatToExcelDate(new Date().toISOString())}</div>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', fontWeight: 'bold', fontSize: '12px', backgroundColor: '#f1f5f9', padding: '10px', border: '1px solid #cbd5e1' }}>
+          <span style={{ color: '#7e22ce' }}>TOTAL: {stats.total}</span>
+          <span style={{ color: '#ef4444' }}>PUNCH A: {stats.a_open} OPEN / {stats.a_closed} CLOSED</span>
+          <span style={{ color: '#3b82f6' }}>PUNCH B: {stats.b_open} OPEN / {stats.b_closed} CLOSED</span>
+          <span style={{ color: '#334155' }}>PUNCH C: {stats.c_open} OPEN / {stats.c_closed} CLOSED</span>
         </div>
 
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
